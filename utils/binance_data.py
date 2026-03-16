@@ -83,7 +83,7 @@ class BinanceData():
             df = hist_data.iloc[:-1].copy()
             # df = df.dropna() # REMOVED CLEANING 
             df['tic'] = i
-            final_df = pd.concat([final_df,df])
+            final_df = pd.concat([final_df,df],ignore_index=True).reset_index(drop=True)
 
             print(f"DOWNLOADED {i} -- Completition Time: {round((num/total)*100)}% -- H: {datetime.now().strftime('%H:%M:%S')}"            )
 
@@ -119,7 +119,8 @@ class BinanceData():
             print(f'{Colours.CYAN}According to analysis, drop:{Colours.YELLOW} {to_drop}{Colours.END}')
             
             to_drop_for_consistency = ['open','high','low']
-            df_uncorrelated = df.drop(to_drop.extend(to_drop_for_consistency), axis=1)
+            to_drop.extend(to_drop_for_consistency)
+            df_uncorrelated = df.drop(list(set(to_drop)), axis=1)
 
             # updatating
             self.tech_indicator_list = [i for i in df_uncorrelated.columns]
