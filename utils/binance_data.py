@@ -1,7 +1,7 @@
 """
 
 Reference: https://github.com/AI4Finance-Foundation/FinRL_Crypto/blob/master/processor_Binance.py
-
+CORRELATION THRESHOLD SET TO 0.9 LIKE IN THE PAPER
 """
 
 import pandas as pd
@@ -16,7 +16,7 @@ from utils.parser import Colours, YMLparser
 import pickle
 from utils.API import API_KEY_BINANCE, API_SECRET_BINANCE
 
-binance_client = Client(api_key=API_KEY_BINANCE, api_secret=API_SECRET_BINANCE)
+from datetime import datetime
 
 class BinanceData():
 
@@ -32,7 +32,8 @@ class BinanceData():
 
 
     def run(self,
-            configs:str|dict):
+            configs:str|dict,
+            csv_format:bool = True):
         
         self.config_file = configs
 
@@ -52,7 +53,12 @@ class BinanceData():
         if self.vix:
             data = self.add_vix(data)
 
-        data.to_pickle('data/training_data.pkl')
+        file_name = f"data/train_data_{self.time_interval}" 
+
+        if csv_format:
+            data.to_csv(f'{file_name}.csv')
+        else:
+            data.to_pickle(f'{file_name}.pkl')
 
         return data
 
@@ -64,7 +70,9 @@ class BinanceData():
         if isinstance(self.ticker_list, str):
             ic(self.ticker_list)
 
-        for i in self.ticker_list:
+        total = len(self.ticker_list)
+
+        for num,i in enumerate(self.ticker_list):
             
             hist_data = self.get_binance_bars(
                 self.start_date,
@@ -72,10 +80,12 @@ class BinanceData():
                 self.time_interval,
                 symbol=i)
             
-            df = hist_data.iloc[:-1]
-            df = df.dropna()
+            df = hist_data.iloc[:-1].copy()
+            # df = df.dropna() # REMOVED CLEANING 
             df['tic'] = i
             final_df = pd.concat([final_df,df])
+
+            print(f"DOWNLOADED {i} -- Completition Time: {round((num/total)*100)}% -- H: {datetime.now().strftime('%H:%M:%S')}"            )
 
         return final_df
 
@@ -213,4 +223,3 @@ class BinanceData():
         if not os.path.exists('data/'):
             print(f'{Colours.HEADER} Created folder "data"{Colours.END}')
             os.mkdir('data')
-
