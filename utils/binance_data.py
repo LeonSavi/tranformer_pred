@@ -9,7 +9,7 @@ from datetime import datetime
 import numpy as np
 import os
 from binance.client import Client
-from talib import RSI, MACD, CCI, DX, ROC, ULTOSC, WILLR, OBV, HT_DCPHASE
+from talib import RSI, MACD, CCI, DX, ROC, ULTOSC, WILLR, OBV, HT_DCPHASE, ATR, BBANDS, NATR, EMA, DEMA
 from icecream import ic
 import datetime as dt
 from utils.parser import Colours, YMLparser
@@ -185,13 +185,26 @@ class BinanceData():
         tic_df['rsi'] = RSI(tic_df['close'], timeperiod=14)
         tic_df['macd'], _, _ = MACD(tic_df['close'], fastperiod=12,
                                     slowperiod=26, signalperiod=9)
-        tic_df['cci'] = CCI(tic_df['high'], tic_df['low'], tic_df['close'], timeperiod=14)
+        tic_df['cci'] = CCI(tic_df['high'], tic_df['low'], tic_df['close'], timeperiod=20)
         tic_df['dx'] = DX(tic_df['high'], tic_df['low'], tic_df['close'], timeperiod=14)
-        tic_df['roc'] = ROC(tic_df['close'], timeperiod=10)
+        tic_df['roc'] = ROC(tic_df['close'], timeperiod=20)
         tic_df['ultosc'] = ULTOSC(tic_df['high'], tic_df['low'], tic_df['close'])
         tic_df['willr'] = WILLR(tic_df['high'], tic_df['low'], tic_df['close'])
         tic_df['obv'] = OBV(tic_df['close'], tic_df['volume'])
         tic_df['ht_dcphase'] = HT_DCPHASE(tic_df['close'])
+
+        tic_df['atr'] = ATR(tic_df['high'], tic_df['low'], tic_df['close'], timeperiod=14)
+        tic_df['natr'] = NATR(tic_df['high'], tic_df['low'], tic_df['close'], timeperiod=14)  # normalized ATR
+        bb_upper, bb_mid, bb_lower = BBANDS(tic_df['close'], timeperiod=20)
+        tic_df['bb_width'] = (bb_upper - bb_lower) / bb_mid   # never stored as columns
+
+        ema_9 = EMA(tic_df['close'], timeperiod=9)
+        ema_21 = EMA(tic_df['close'], timeperiod=21)
+        tic_df['ema_cross'] = ema_9 - ema_21  # positive = bullish, negative = bearish
+
+        tic_df['candle_body'] = tic_df['close'] - tic_df['open']          # body size + direction
+        tic_df['upper_wick'] = tic_df['high'] - tic_df[['open','close']].max(axis=1)  # rejection wicks
+        tic_df['lower_wick'] = tic_df[['open','close']].min(axis=1) - tic_df['low']
 
         return tic_df
     
