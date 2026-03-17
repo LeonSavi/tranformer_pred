@@ -198,9 +198,9 @@ class BinanceData():
         bb_upper, bb_mid, bb_lower = BBANDS(tic_df['close'], timeperiod=20)
         tic_df['bb_width'] = (bb_upper - bb_lower) / bb_mid   # never stored as columns
 
-        ema_9 = EMA(tic_df['close'], timeperiod=9)
         ema_21 = EMA(tic_df['close'], timeperiod=21)
-        tic_df['ema_cross'] = ema_9 - ema_21  # positive = bullish, negative = bearish
+        ema_50 = EMA(tic_df['close'], timeperiod=50)
+        tic_df['ema_cross'] = ema_21 - ema_50  # positive = bullish, negative = bearish
 
         tic_df['candle_body'] = tic_df['close'] - tic_df['open']          # body size + direction
         tic_df['upper_wick'] = tic_df['high'] - tic_df[['open','close']].max(axis=1)  # rejection wicks

@@ -42,5 +42,6 @@ if __name__=='__main__':
 
     TICKER_CONFIGS['ticker_list'] = clean_tickers
 
-    binance.run(TICKER_CONFIGS)
+    binance.run(TICKER_CONFIGS,csv_format=False)
+    
 
