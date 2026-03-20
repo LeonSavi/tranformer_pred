@@ -1,4 +1,7 @@
 API.py
 */__pycache__/*
+/__pycache__/
 trs_env/
 test.ipynb
+/lightning_logs/
+trs_env
