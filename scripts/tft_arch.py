@@ -42,7 +42,7 @@ def prepare_tft_dataset(
     df = df.sort_values(['tic', 'timestamp']).reset_index(drop=True)
     df['time_idx']    = df.groupby('tic').cumcount()
     df['day_of_week'] = df['timestamp'].dt.dayofweek
-
+    df['month'] = df['timestamp'].dt.month
     # ── fix: must be string for TimeSeriesDataSet categorical ────────────────
     df['is_weekend'] = df['timestamp'].dt.dayofweek.ge(5).map(
         {True: 'yes', False: 'no'}
@@ -67,8 +67,8 @@ def prepare_tft_dataset(
             'rsi', 'macd', 'cci', 'dx',
             'roc', 'ultosc', 'willr', 'obv', 'ht_dcphase',
         ] + scale_cols,
-        time_varying_known_reals=['time_idx', 'day_of_week'],
-        time_varying_known_categoricals=['is_weekend'],   # now a string column
+        time_varying_known_reals=['time_idx', 'day_of_week','month'],
+        # time_varying_known_categoricals=['is_weekend'],   # now a string column
         target_normalizer=TorchNormalizer(method='identity'),
         allow_missing_timesteps=True,
     )
@@ -76,7 +76,8 @@ def prepare_tft_dataset(
     validation = TimeSeriesDataSet.from_dataset(
         training, df,
         min_prediction_idx=training_cutoff + 1,
-        stop_randomization=True,
+        stop_randomization=True
+
     )
 
     return training, validation, df
@@ -97,9 +98,11 @@ def train_tft(training, validation, settings: dict = {}):
         dropout=cfg['dropout'],
         attention_head_size=cfg['attention_head_size'],
         hidden_continuous_size=cfg['hidden_continuous_size'],
-        loss=QuantileLoss(),
-        log_interval=cfg['log_interval'],
+        loss=QuantileLoss(quantiles=[0.1, 0.5, 0.9]),
+        # log_interval=cfg['log_interval'],
         reduce_on_plateau_patience=cfg['reduce_on_plateau_patience'],
+        log_interval=-1,      # no plots during training → faster
+        log_val_interval=-1
     )
 
     trainer = pl.Trainer(
@@ -107,7 +110,9 @@ def train_tft(training, validation, settings: dict = {}):
         gradient_clip_val=cfg['gradient_clip_val'],
         callbacks=[EarlyStopping(monitor='val_loss', patience=cfg['early_stopping_patience'])],
         accelerator='gpu' if torch.cuda.is_available() else 'cpu',
-    )
+        precision='bf16-mixed',      # bf16/fp16 — halves VRAM, ~2x speed on Ampere+
+        accumulate_grad_batches=2, # effective batch = 256 * 2 = 512
+        )
 
     trainer.fit(tft, train_dl, val_dl)
     return tft

@@ -8,6 +8,9 @@ from utils.cleaner import CleanerTS
 from scripts.tft_arch import prepare_tft_dataset, train_tft
 from pytorch_forecasting.data.encoders import TorchNormalizer
 from pytorch_forecasting import TemporalFusionTransformer, QuantileLoss
+
+torch.set_float32_matmul_precision('high')
+
 # ── Config ────────────────────────────────────────────────────────────────────
 DATA_PATH          = 'data/train_data_1d.pkl'
 MODEL_PATH         = 'outputs/tft_crypto.ckpt'
@@ -21,22 +24,24 @@ CUTOFF_DATE        = '2025-06-01'   # train before / validate+backtest after
 # ── MODEL SETTINGS ────────────────────────────────────────────────────────────────────
 
 SETTINGS = {
-    # dataloader
-    'batch_size'                : 64,
-    'num_workers'               : 4,
-    # model
-    'learning_rate'             : 0.03,
-    'hidden_size'               : 64,
-    'lstm_layers'               : 2,
-    'dropout'                   : 0.1,
-    'attention_head_size'       : 4,
-    'hidden_continuous_size'    : 32,
+    # dataloader — 5070 Ti can handle larger batches, more workers
+    'batch_size'                : 256,    
+    'num_workers'               : 8,       
+
+    # model — increase capacity, 16GB gives you headroom
+    'learning_rate'             : 0.001,   # lower + scheduler is more stable than 0.03
+    'hidden_size'               : 128,     # 64 → 128
+    'lstm_layers'               : 2,       # keep — 3 rarely helps for daily data
+    'dropout'                   : 0.2,     # increase slightly with bigger model
+    'attention_head_size'       : 4,       # keep
+    'hidden_continuous_size'    : 64,      # 32 → 64
     'log_interval'              : 10,
-    'reduce_on_plateau_patience': 4,
+    'reduce_on_plateau_patience': 3,       # reduce faster, you have many epochs
+
     # trainer
-    'max_epochs'                : 50,
-    'gradient_clip_val'         : 0.1,
-    'early_stopping_patience'   : 5,
+    'max_epochs'                : 100,     # give it time, early stopping will cut it
+    'gradient_clip_val'         : 0.1,     # keep — important for crypto
+    'early_stopping_patience'   : 10,      # more patience with slower LR
 }
 
 # ── 1. Clean & Scale ──────────────────────────────────────────────────────────
@@ -66,68 +71,50 @@ def run_training(scaled_df: pd.DataFrame):
 
 
 # ── 3. Backtest ───────────────────────────────────────────────────────────────
-def run_backtest(
-    tft,
-    validation,
-    scaled_df: pd.DataFrame,
-    scaler,
-) -> pd.DataFrame:
+def run_backtest(tft, validation, prep_df: pd.DataFrame, scaler) -> pd.DataFrame:
     """
-    Walk-forward backtest on the validation set.
-    Returns a DataFrame with columns:
-        tic | date | actual | p10 | p50 | p90 | actual_rescaled | p50_rescaled
+    prep_df is the output of prepare_tft_dataset() — it has time_idx,
+    scale_mean_close, scale_std_close columns.
     """
     val_dl = validation.to_dataloader(train=False, batch_size=64, num_workers=4)
 
-    # raw predictions shape: (N_samples, horizon, n_quantiles)
-    raw_preds, index = tft.predict(
-        val_dl,
-        mode='quantiles',
-        return_index=True,
-    )
+    raw_preds = tft.predict(val_dl, mode='quantiles', return_index=True)
+    predictions = raw_preds.output
+    index       = raw_preds.index
 
     records = []
-
     for i, row in index.iterrows():
         tic      = row['tic']
         time_idx = row['time_idx']
 
-        # retrieve scale params that were live at this prediction origin
-        origin = scaled_df[
-            (scaled_df['tic'] == tic) &
-            (scaled_df['time_idx'] == time_idx)
+        origin = prep_df[
+            (prep_df['tic'] == tic) &
+            (prep_df['time_idx'] == time_idx)
         ]
         if origin.empty:
             continue
 
         scale_mean = origin['scale_mean_close'].values[0]
         scale_std  = origin['scale_std_close'].values[0]
+        preds      = predictions[i]
 
-        # predictions for this sample across the horizon
-        preds = raw_preds[i]                        # (horizon, 3)  → P10/P50/P90
-
-        # actual values for the horizon window
-        actuals = scaled_df[
-            (scaled_df['tic'] == tic) &
-            (scaled_df['time_idx'] > time_idx) &
-            (scaled_df['time_idx'] <= time_idx + MAX_PRED_LENGTH)
+        actuals = prep_df[
+            (prep_df['tic'] == tic) &
+            (prep_df['time_idx'] > time_idx) &
+            (prep_df['time_idx'] <= time_idx + MAX_PRED_LENGTH)
         ]['close'].values
 
         for h in range(min(MAX_PRED_LENGTH, len(actuals))):
             p10, p50, p90 = preds[h].tolist()
-
             records.append({
-                'tic'            : tic,
-                'time_idx'       : time_idx + h + 1,
-                'actual_scaled'  : actuals[h],
-                'p10_scaled'     : p10,
-                'p50_scaled'     : p50,
-                'p90_scaled'     : p90,
-                # inverse transform back to original price
-                'actual'         : actuals[h]  * scale_std + scale_mean,
-                'p10'            : p10          * scale_std + scale_mean,
-                'p50'            : p50          * scale_std + scale_mean,
-                'p90'            : p90          * scale_std + scale_mean,
+                'tic'           : tic,
+                'time_idx'      : time_idx + h + 1,
+                'actual_scaled' : actuals[h],
+                'p50_scaled'    : p50,
+                'actual'        : actuals[h] * scale_std + scale_mean,
+                'p10'           : p10        * scale_std + scale_mean,
+                'p50'           : p50        * scale_std + scale_mean,
+                'p90'           : p90        * scale_std + scale_mean,
             })
 
     results = pd.DataFrame(records)
@@ -186,19 +173,23 @@ def plot_backtest(results: pd.DataFrame, tics: list[str] = None, n_tics: int = 4
 if __name__ == '__main__':
     scaled_df, scaler = get_data()
 
+    # scaled_df = scaled_df.sample(n=50000)
+
     if os.path.exists(MODEL_PATH):
-        print(f'Loading existing model from {MODEL_PATH}')
-        _, validation, prep_df = prepare_tft_dataset(
+        training, validation, prep_df = prepare_tft_dataset(
             scaled_df,
             max_encoder_length=MAX_ENCODER_LENGTH,
             max_prediction_length=MAX_PRED_LENGTH,
             cutoff_date=CUTOFF_DATE,
         )
-        tft = TemporalFusionTransformer.load_from_checkpoint(MODEL_PATH)
+        tft = TemporalFusionTransformer.load_from_checkpoint(
+            MODEL_PATH,
+            map_location='cuda' if torch.cuda.is_available() else 'cpu',
+        )
     else:
-        # ── train fresh ───────────────────────────────────────────────────────
         tft, _, validation, prep_df = run_training(scaled_df)
 
-    results = run_backtest(tft, validation, scaled_df, scaler)
+    # ── pass prep_df (has time_idx) not scaled_df ────────────────────────────
+    results = run_backtest(tft, validation, prep_df, scaler)
     metrics  = compute_metrics(results)
-    plot_backtest(results, n_tics=4)
+    plot_backtest(results, n_tics=10)

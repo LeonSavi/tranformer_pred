@@ -74,7 +74,7 @@ class CleanerTS:
 
             while curr <= mx_idx:                   
                 if curr not in dt_set:
-                    print(f'Missing for {tic}: {curr}')
+                    # print(f'Missing for {tic}: {curr}')
                     fixed_row = self._fix_row(check, curr, tic)  
                     if fixed_row is not None:
                         new_rows.append(fixed_row) 
