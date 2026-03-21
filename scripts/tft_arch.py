@@ -110,8 +110,8 @@ def train_tft(training, validation, settings: dict = {}):
         gradient_clip_val=cfg['gradient_clip_val'],
         callbacks=[EarlyStopping(monitor='val_loss', patience=cfg['early_stopping_patience'])],
         accelerator='gpu' if torch.cuda.is_available() else 'cpu',
-        precision='bf16-mixed',      # bf16/fp16 — halves VRAM, ~2x speed on Ampere+
-        accumulate_grad_batches=2, # effective batch = 256 * 2 = 512
+        precision=cfg['precision'],   
+        accumulate_grad_batches=cfg['accumulate_grad_batches'], # effective batch = 256 * 2 = 512
         )
 
     trainer.fit(tft, train_dl, val_dl)

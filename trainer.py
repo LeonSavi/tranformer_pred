@@ -24,24 +24,25 @@ CUTOFF_DATE        = '2025-06-01'   # train before / validate+backtest after
 # ── MODEL SETTINGS ────────────────────────────────────────────────────────────────────
 
 SETTINGS = {
-    # dataloader — 5070 Ti can handle larger batches, more workers
-    'batch_size'                : 256,    
-    'num_workers'               : 8,       
+    # dataloader
+    'batch_size'                : 512,    # 256 → 1024, fills VRAM properly
+    'num_workers'               : 12,      # 8 → 12
 
-    # model — increase capacity, 16GB gives you headroom
-    'learning_rate'             : 0.001,   # lower + scheduler is more stable than 0.03
-    'hidden_size'               : 128,     # 64 → 128
-    'lstm_layers'               : 2,       # keep — 3 rarely helps for daily data
-    'dropout'                   : 0.2,     # increase slightly with bigger model
-    'attention_head_size'       : 4,       # keep
-    'hidden_continuous_size'    : 64,      # 32 → 64
-    'log_interval'              : 10,
-    'reduce_on_plateau_patience': 3,       # reduce faster, you have many epochs
+    # model
+    'learning_rate'             : 0.00075,  # lower LR with bigger batch (linear scaling rule)
+    'hidden_size'               : 256,     # 128 → 256
+    'lstm_layers'               : 3,       # 2 → 3
+    'dropout'                   : 0.2,     # keep
+    'attention_head_size'       : 8,       # 4 → 8
+    'hidden_continuous_size'    : 128,     # 64 → 128
 
-    # trainer
-    'max_epochs'                : 100,     # give it time, early stopping will cut it
-    'gradient_clip_val'         : 0.1,     # keep — important for crypto
-    'early_stopping_patience'   : 10,      # more patience with slower LR
+    'reduce_on_plateau_patience': 3,
+    'max_epochs'                : 100,
+    'gradient_clip_val'         : 0.1,
+    'early_stopping_patience'   : 10,
+
+    'precision'                 : 'bf16-mixed',
+    'accumulate_grad_batches'   : 1
 }
 
 # ── 1. Clean & Scale ──────────────────────────────────────────────────────────
@@ -67,6 +68,7 @@ def run_training(scaled_df: pd.DataFrame):
     tft = train_tft(training, validation,SETTINGS)
     os.makedirs('outputs', exist_ok=True)
     tft.trainer.save_checkpoint(MODEL_PATH)
+    torch.save(tft.state_dict(), 'outputs/tft_weights.pth')
     return tft, training, validation, prep_df 
 
 
