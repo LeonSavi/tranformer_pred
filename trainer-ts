@@ -1,0 +1,296 @@
+# trainer_hf.py — Train HuggingFace Time Series Transformer
+# ─────────────────────────────────────────────────────────────────────────────
+import os
+import torch
+import numpy as np
+import pandas as pd
+from torch.utils.data import Dataset, DataLoader
+from transformers import (
+    TimeSeriesTransformerConfig,
+    TimeSeriesTransformerForPrediction,
+)
+from huggingface_hub import HfApi, login
+
+from utils.cleaner import CleanerTS
+from scripts.tft_arch import prepare_tft_dataset
+from settings import SETTINGS
+from utils.API import HF_TOKEN
+
+torch.set_float32_matmul_precision('high')
+
+# ── Config ────────────────────────────────────────────────────────────────────
+DATA_PATH          = 'data/train_data_1d.pkl'
+MODEL_PATH         = 'outputs/hf_ts_transformer.pt'
+MAX_ENCODER_LENGTH = 90
+MAX_PRED_LENGTH    = 7
+SCALER_WINDOW      = 90
+CUTOFF_DATE        = '2025-12-01'
+REPO_ID            = 'LeoSavi/HF_TST_Crypto'
+
+DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+# covariates — same features the TFT sees
+COVARIATE_COLS = [
+    'volume', 'rsi', 'macd', 'cci', 'dx', 'roc',
+    'ultosc', 'willr', 'obv', 'ht_dcphase',
+    'atr', 'natr', 'bb_width', 'ema_cross',
+    'candle_body', 'upper_wick', 'lower_wick',
+    'day_of_week',
+]
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  DATASET
+# ═════════════════════════════════════════════════════════════════════════════
+class CryptoTimeSeriesDataset(Dataset):
+    """Sliding-window dataset that mirrors the TFT's train/val split."""
+
+    def __init__(
+        self,
+        df: pd.DataFrame,
+        context_length: int,
+        prediction_length: int,
+        covariate_cols: list[str],
+    ):
+        self.context_length    = context_length
+        self.prediction_length = prediction_length
+        self.samples           = []
+
+        total_len = context_length + prediction_length
+
+        for tic, grp in df.groupby('tic'):
+            grp = grp.sort_values('time_idx').reset_index(drop=True)
+            n   = len(grp)
+
+            target = grp['close'].values.astype(np.float32)
+            covs   = grp[covariate_cols].values.astype(np.float32)
+            tidxs  = grp['time_idx'].values
+
+            for start in range(n - total_len + 1):
+                end_ctx  = start + context_length
+                end_pred = end_ctx + prediction_length
+
+                self.samples.append({
+                    'past_values'          : target[start:end_ctx],
+                    'past_time_features'   : covs[start:end_ctx],
+                    'past_observed_mask'   : np.ones(context_length, dtype=np.float32),
+                    'future_values'        : target[end_ctx:end_pred],
+                    'future_time_features' : covs[end_ctx:end_pred],
+                    'origin_time_idx'      : int(tidxs[end_ctx - 1]),
+                })
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        s = self.samples[idx]
+        return {
+            'past_values'          : torch.tensor(s['past_values']),
+            'past_time_features'   : torch.tensor(s['past_time_features']),
+            'past_observed_mask'   : torch.tensor(s['past_observed_mask']),
+            'future_values'        : torch.tensor(s['future_values']),
+            'future_time_features' : torch.tensor(s['future_time_features']),
+        }
+
+
+def _collate(batch: list[dict]) -> dict:
+    return {k: torch.stack([b[k] for b in batch]) for k in batch[0]}
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  DATA
+# ═════════════════════════════════════════════════════════════════════════════
+def get_data():
+    cleaner = CleanerTS(
+        dir=DATA_PATH,
+        window=7,
+        scaler_window=SCALER_WINDOW,
+    )
+    scaled_df = cleaner.run()
+    print(f'Data ready: {scaled_df.shape}  |  tickers: {scaled_df.tic.nunique()}')
+
+    # reuse TFT's prepare function to get consistent time_idx and cutoff
+    _, _, prep_df = prepare_tft_dataset(
+        scaled_df,
+        max_encoder_length=MAX_ENCODER_LENGTH,
+        max_prediction_length=MAX_PRED_LENGTH,
+        cutoff_date=CUTOFF_DATE,
+    )
+    return prep_df
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  MODEL
+# ═════════════════════════════════════════════════════════════════════════════
+def build_model(n_time_features: int) -> TimeSeriesTransformerForPrediction:
+    config = TimeSeriesTransformerConfig(
+        prediction_length=MAX_PRED_LENGTH,
+        context_length=MAX_ENCODER_LENGTH,
+        input_size=1,
+        num_time_features=n_time_features,
+        # architecture — capacity matched to TFT SETTINGS
+        d_model=SETTINGS['hidden_size'],
+        encoder_layers=SETTINGS['lstm_layers'],
+        decoder_layers=SETTINGS['lstm_layers'],
+        encoder_attention_heads=SETTINGS['attention_head_size'],
+        decoder_attention_heads=SETTINGS['attention_head_size'],
+        encoder_ffn_dim=SETTINGS['hidden_size'] * 2,
+        decoder_ffn_dim=SETTINGS['hidden_size'] * 2,
+        dropout=SETTINGS['dropout'],
+        # distributional output for quantile estimation
+        distribution_output='student_t',
+        num_parallel_samples=200,
+    )
+    return TimeSeriesTransformerForPrediction(config)
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  TRAIN
+# ═════════════════════════════════════════════════════════════════════════════
+def train(prep_df: pd.DataFrame):
+    covariate_cols = [c for c in COVARIATE_COLS if c in prep_df.columns]
+    cutoff_time_idx = prep_df[
+        prep_df['timestamp'] <= CUTOFF_DATE
+    ]['time_idx'].max()
+
+    # ── datasets ──────────────────────────────────────────────────────
+    train_df = prep_df[prep_df['time_idx'] <= cutoff_time_idx].copy()
+
+    train_ds = CryptoTimeSeriesDataset(
+        train_df, MAX_ENCODER_LENGTH, MAX_PRED_LENGTH, covariate_cols,
+    )
+
+    # validation: windows whose prediction origin is after cutoff
+    val_ds = CryptoTimeSeriesDataset(
+        prep_df, MAX_ENCODER_LENGTH, MAX_PRED_LENGTH, covariate_cols,
+    )
+    val_ds.samples = [
+        s for s in val_ds.samples
+        if s['origin_time_idx'] >= cutoff_time_idx
+    ]
+
+    print(f'Train samples: {len(train_ds):,}  |  Val samples: {len(val_ds):,}')
+
+    train_dl = DataLoader(
+        train_ds,
+        batch_size=SETTINGS['batch_size'],
+        shuffle=True,
+        num_workers=SETTINGS['num_workers'],
+        collate_fn=_collate,
+        pin_memory=True,
+    )
+    val_dl = DataLoader(
+        val_ds,
+        batch_size=SETTINGS['batch_size'],
+        shuffle=False,
+        num_workers=SETTINGS['num_workers'],
+        collate_fn=_collate,
+        pin_memory=True,
+    )
+
+    # ── model + optimizer ─────────────────────────────────────────────
+    model = build_model(n_time_features=len(covariate_cols)).to(DEVICE)
+    optimizer = torch.optim.AdamW(
+        model.parameters(),
+        lr=SETTINGS['learning_rate'],
+        weight_decay=1e-5,
+    )
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        patience=SETTINGS['reduce_on_plateau_patience'],
+        factor=0.5,
+    )
+
+    n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f'Model parameters: {n_params:,}')
+
+    best_val_loss = float('inf')
+    wait = 0
+
+    # ── training loop ─────────────────────────────────────────────────
+    for epoch in range(SETTINGS['max_epochs']):
+
+        # train
+        model.train()
+        train_losses = []
+        for batch in train_dl:
+            optimizer.zero_grad()
+            out = model(
+                past_values=batch['past_values'].to(DEVICE),
+                past_time_features=batch['past_time_features'].to(DEVICE),
+                past_observed_mask=batch['past_observed_mask'].to(DEVICE),
+                future_values=batch['future_values'].to(DEVICE),
+                future_time_features=batch['future_time_features'].to(DEVICE),
+            )
+            loss = out.loss
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(
+                model.parameters(), SETTINGS['gradient_clip_val'],
+            )
+            optimizer.step()
+            train_losses.append(loss.item())
+
+        # validate
+        model.eval()
+        val_losses = []
+        with torch.no_grad():
+            for batch in val_dl:
+                out = model(
+                    past_values=batch['past_values'].to(DEVICE),
+                    past_time_features=batch['past_time_features'].to(DEVICE),
+                    past_observed_mask=batch['past_observed_mask'].to(DEVICE),
+                    future_values=batch['future_values'].to(DEVICE),
+                    future_time_features=batch['future_time_features'].to(DEVICE),
+                )
+                val_losses.append(out.loss.item())
+
+        avg_train = np.mean(train_losses)
+        avg_val   = np.mean(val_losses)
+        scheduler.step(avg_val)
+        lr_now = optimizer.param_groups[0]['lr']
+
+        print(
+            f'  Epoch {epoch+1:3d}/{SETTINGS["max_epochs"]}  '
+            f'train={avg_train:.4f}  val={avg_val:.4f}  lr={lr_now:.2e}'
+        )
+
+        # checkpoint
+        if avg_val < best_val_loss:
+            best_val_loss = avg_val
+            wait = 0
+            os.makedirs('outputs', exist_ok=True)
+            torch.save(model.state_dict(), MODEL_PATH)
+            print(f'    ↳ new best val_loss={avg_val:.4f}  saved → {MODEL_PATH}')
+        else:
+            wait += 1
+            if wait >= SETTINGS['early_stopping_patience']:
+                print(f'  Early stopping at epoch {epoch+1}')
+                break
+
+    # reload best
+    model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE))
+    print(f'\nTraining complete. Best val_loss={best_val_loss:.4f}')
+    return model
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  UPLOAD
+# ═════════════════════════════════════════════════════════════════════════════
+def upload_to_hf():
+    login(token=HF_TOKEN)
+    api = HfApi()
+    api.upload_file(
+        path_or_fileobj=MODEL_PATH,
+        path_in_repo='hf_ts_transformer.pt',
+        repo_id=REPO_ID,
+        commit_message='Update HF Time Series Transformer',
+    )
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  ENTRY
+# ═════════════════════════════════════════════════════════════════════════════
+if __name__ == '__main__':
+    prep_df = get_data()
+    model   = train(prep_df)
+    upload_to_hf()

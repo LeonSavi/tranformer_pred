@@ -33,7 +33,8 @@ class BinanceData():
 
     def run(self,
             configs:str|dict,
-            csv_format:bool = True):
+            csv_format:bool = True,
+            add_sent:bool=True):
         
         self.config_file = configs
 
@@ -52,6 +53,22 @@ class BinanceData():
 
         if self.vix:
             data = self.add_vix(data)
+
+        if add_sent:
+            sentiment = pd.read_csv('data/sentiment_index.csv')
+
+            sentiment['datetime'] = pd.to_datetime(sentiment['datetime']).dt.floor('D')
+            sentiment = sentiment.set_index('datetime')
+            
+            # Remove junk columns if they exist
+            if 'Unnamed: 0' in sentiment.columns:
+                sentiment = sentiment.drop(columns=['Unnamed: 0'])
+
+            data.index = pd.to_datetime(data.index).floor('D')
+
+            data = data.join(sentiment, how='left')
+
+
 
         file_name = f"data/train_data_{self.time_interval}" 
 
