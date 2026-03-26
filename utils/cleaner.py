@@ -5,12 +5,12 @@ from utils.scaler import CryptoRollingScaler
 
 COLUMNS = ['close', 'volume', 'tic', 'rsi', 'macd', 'cci', 'dx', 'roc', 'ultosc',
            'willr', 'obv', 'ht_dcphase', 'atr', 'natr', 'bb_width', 'ema_cross',
-           'candle_body', 'upper_wick', 'lower_wick']
+           'candle_body', 'upper_wick', 'lower_wick', 'sentiment_index']
 
 PRICE_COLS      = ['close', 'volume', 'obv']
 INDICATOR_COLS  = ['rsi', 'macd', 'cci', 'dx', 'roc', 'ultosc', 'willr',
                    'ht_dcphase', 'atr', 'natr', 'bb_width', 'ema_cross',
-                   'candle_body', 'upper_wick', 'lower_wick']
+                   'candle_body', 'upper_wick', 'lower_wick', 'sentiment_index']
 NUMERIC_COLS    = [col for col in COLUMNS if col != 'tic']
 
 

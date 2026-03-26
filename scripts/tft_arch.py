@@ -5,6 +5,7 @@ import lightning.pytorch as pl
 from lightning.pytorch.callbacks import EarlyStopping
 import torch
 import pandas as pd
+from utils.logger import TrainingHistoryLogger
 
 
 DEFAULT_SETTINGS = {
@@ -66,6 +67,9 @@ def prepare_tft_dataset(
             'close', 'volume',
             'rsi', 'macd', 'cci', 'dx',
             'roc', 'ultosc', 'willr', 'obv', 'ht_dcphase',
+            'atr', 'natr', 'bb_width', 'ema_cross',
+            'candle_body', 'upper_wick', 'lower_wick',
+            'sentiment_index',
         ] + scale_cols,
         time_varying_known_reals=['time_idx', 'day_of_week','month'],
         # time_varying_known_categoricals=['is_weekend'],   # now a string column
@@ -105,14 +109,23 @@ def train_tft(training, validation, settings: dict = {}):
         log_val_interval=-1
     )
 
+    history_logger = TrainingHistoryLogger()
+
     trainer = pl.Trainer(
         max_epochs=cfg['max_epochs'],
         gradient_clip_val=cfg['gradient_clip_val'],
-        callbacks=[EarlyStopping(monitor='val_loss', patience=cfg['early_stopping_patience'])],
+        callbacks=[
+            EarlyStopping(monitor='val_loss', patience=cfg['early_stopping_patience']),
+            history_logger,
+        ],
         accelerator='gpu' if torch.cuda.is_available() else 'cpu',
         precision=cfg['precision'],   
         accumulate_grad_batches=cfg['accumulate_grad_batches'], # effective batch = 256 * 2 = 512
         )
 
     trainer.fit(tft, train_dl, val_dl)
+
+    hist_df = pd.DataFrame(history_logger.history)
+    hist_df.to_csv('outputs/tft_training_history.csv', index=False)
+    
     return tft

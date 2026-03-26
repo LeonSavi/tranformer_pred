@@ -13,7 +13,7 @@ from huggingface_hub import HfApi, login
 
 from utils.cleaner import CleanerTS
 from scripts.tft_arch import prepare_tft_dataset
-from settings import SETTINGS
+from settings.train_settings import SETTINGS
 from utils.API import HF_TOKEN
 
 torch.set_float32_matmul_precision('high')
@@ -24,7 +24,7 @@ MODEL_PATH         = 'outputs/hf_ts_transformer.pt'
 MAX_ENCODER_LENGTH = 90
 MAX_PRED_LENGTH    = 7
 SCALER_WINDOW      = 90
-CUTOFF_DATE        = '2025-12-01'
+CUTOFF_DATE        = '2025-01-01'
 REPO_ID            = 'LeoSavi/HF_TST_Crypto'
 
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -35,7 +35,7 @@ COVARIATE_COLS = [
     'ultosc', 'willr', 'obv', 'ht_dcphase',
     'atr', 'natr', 'bb_width', 'ema_cross',
     'candle_body', 'upper_wick', 'lower_wick',
-    'day_of_week',
+    'day_of_week','sentiment_index',
 ]
 
 
@@ -65,15 +65,17 @@ class CryptoTimeSeriesDataset(Dataset):
             target = grp['close'].values.astype(np.float32)
             covs   = grp[covariate_cols].values.astype(np.float32)
             tidxs  = grp['time_idx'].values
+            MAX_LAG = 7  # at the top of the file
 
-            for start in range(n - total_len + 1):
-                end_ctx  = start + context_length
+            # in __init__, replace the slicing:
+            for start in range(n - total_len - MAX_LAG + 1):
+                end_ctx  = start + context_length + MAX_LAG
                 end_pred = end_ctx + prediction_length
 
                 self.samples.append({
-                    'past_values'          : target[start:end_ctx],
+                    'past_values'          : target[start:end_ctx],          
                     'past_time_features'   : covs[start:end_ctx],
-                    'past_observed_mask'   : np.ones(context_length, dtype=np.float32),
+                    'past_observed_mask'   : np.ones(context_length + MAX_LAG, dtype=np.float32),
                     'future_values'        : target[end_ctx:end_pred],
                     'future_time_features' : covs[end_ctx:end_pred],
                     'origin_time_idx'      : int(tidxs[end_ctx - 1]),
@@ -140,6 +142,7 @@ def build_model(n_time_features: int) -> TimeSeriesTransformerForPrediction:
         # distributional output for quantile estimation
         distribution_output='student_t',
         num_parallel_samples=200,
+        lags_sequence=[1, 2, 3, 4, 5, 6, 7]
     )
     return TimeSeriesTransformerForPrediction(config)
 
@@ -192,8 +195,8 @@ def train(prep_df: pd.DataFrame):
     model = build_model(n_time_features=len(covariate_cols)).to(DEVICE)
     optimizer = torch.optim.AdamW(
         model.parameters(),
-        lr=SETTINGS['learning_rate'],
-        weight_decay=1e-5,
+        lr=SETTINGS['learning_rate_hf'],
+        weight_decay=1e-3,
     )
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
@@ -206,6 +209,8 @@ def train(prep_df: pd.DataFrame):
 
     best_val_loss = float('inf')
     wait = 0
+
+    history = {'epoch': [], 'train_loss': [], 'val_loss': [], 'lr': []}
 
     # ── training loop ─────────────────────────────────────────────────
     for epoch in range(SETTINGS['max_epochs']):
@@ -249,6 +254,11 @@ def train(prep_df: pd.DataFrame):
         scheduler.step(avg_val)
         lr_now = optimizer.param_groups[0]['lr']
 
+        history['epoch'].append(epoch + 1)
+        history['train_loss'].append(avg_train)
+        history['val_loss'].append(avg_val)
+        history['lr'].append(lr_now)
+
         print(
             f'  Epoch {epoch+1:3d}/{SETTINGS["max_epochs"]}  '
             f'train={avg_train:.4f}  val={avg_val:.4f}  lr={lr_now:.2e}'
@@ -266,6 +276,10 @@ def train(prep_df: pd.DataFrame):
             if wait >= SETTINGS['early_stopping_patience']:
                 print(f'  Early stopping at epoch {epoch+1}')
                 break
+    
+    # after the training loop ends, before return:
+    hist_df = pd.DataFrame(history)
+    hist_df.to_csv('outputs/hf_training_history.csv', index=False)
 
     # reload best
     model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE))
@@ -279,6 +293,7 @@ def train(prep_df: pd.DataFrame):
 def upload_to_hf():
     login(token=HF_TOKEN)
     api = HfApi()
+    api.create_repo(repo_id=REPO_ID, exist_ok=True)
     api.upload_file(
         path_or_fileobj=MODEL_PATH,
         path_in_repo='hf_ts_transformer.pt',
@@ -291,6 +306,6 @@ def upload_to_hf():
 #  ENTRY
 # ═════════════════════════════════════════════════════════════════════════════
 if __name__ == '__main__':
-    prep_df = get_data()
-    model   = train(prep_df)
+    # prep_df = get_data()
+    # model   = train(prep_df)
     upload_to_hf()

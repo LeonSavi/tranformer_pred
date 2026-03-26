@@ -11,7 +11,8 @@ from pytorch_forecasting import TemporalFusionTransformer, QuantileLoss
 
 from huggingface_hub import HfApi, login
 from utils.API import HF_TOKEN
-from settings import *
+from utils.logger import TrainingHistoryLogger
+from settings.train_settings import SETTINGS
 
 torch.set_float32_matmul_precision('high')
 
@@ -22,7 +23,7 @@ RESULTS_PATH       = 'outputs/backtest_results.csv'
 MAX_ENCODER_LENGTH = 90
 MAX_PRED_LENGTH    = 7
 SCALER_WINDOW      = 90
-CUTOFF_DATE        = '2025-12-01'   # train before / validate+backtest after
+CUTOFF_DATE        = '2025-01-01'   # train before / validate+backtest after
 
 REPO_ID            = 'LeoSavi/TFT_Crypto'
 
@@ -58,7 +59,7 @@ def load_to_hf():
 
     login(token=HF_TOKEN)
     api = HfApi()
-
+    api.create_repo(repo_id=REPO_ID, exist_ok=True)
     api.upload_file(
         path_or_fileobj='outputs/tft_weights.pth',
         path_in_repo="TFT_model.pth",
