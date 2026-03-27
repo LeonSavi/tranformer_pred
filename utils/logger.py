@@ -1,16 +1,26 @@
-from lightning.pytorch.callbacks import EarlyStopping, Callback
+from lightning.pytorch.callbacks import Callback
 
 class TrainingHistoryLogger(Callback):
     def __init__(self):
-        self.history = {'epoch': [], 'train_loss': [], 'val_loss': []}
+        self.train_losses = []
+        self.val_losses = []
 
     def on_train_epoch_end(self, trainer, pl_module):
-        self.history['epoch'].append(trainer.current_epoch + 1)
-        self.history['train_loss'].append(
-            trainer.callback_metrics.get('train_loss_epoch', float('nan')).item()
-        )
+        loss = trainer.callback_metrics.get('train_loss_epoch')
+        if loss is not None:
+            self.train_losses.append(loss.item())
 
     def on_validation_epoch_end(self, trainer, pl_module):
-        val = trainer.callback_metrics.get('val_loss', float('nan'))
-        if len(self.history['val_loss']) < len(self.history['epoch']):
-            self.history['val_loss'].append(val.item())
+        loss = trainer.callback_metrics.get('val_loss')
+        if loss is not None:
+            self.val_losses.append(loss.item())
+
+    @property
+    def history(self):
+        # align to shorter list (validation may have one extra from sanity check)
+        n = min(len(self.train_losses), len(self.val_losses))
+        return {
+            'epoch': list(range(1, n + 1)),
+            'train_loss': self.train_losses[:n],
+            'val_loss': self.val_losses[:n],
+        }

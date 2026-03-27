@@ -16,7 +16,7 @@ from transformers import (
     TimeSeriesTransformerConfig,
     TimeSeriesTransformerForPrediction,
 )
-from settings import *
+from settings.train_settings import SETTINGS
 
 torch.set_float32_matmul_precision('high')
 plt.rcParams.update({
@@ -34,7 +34,7 @@ DATA_PATH          = 'data/train_data_1d.pkl'
 MAX_ENCODER_LENGTH = 90
 MAX_PRED_LENGTH    = 7
 SCALER_WINDOW      = 90
-CUTOFF_DATE        = '2025-12-01'
+CUTOFF_DATE        = '2025-01-01'
 
 # HuggingFace repos
 TFT_REPO_ID  = 'LeoSavi/TFT_Crypto'
@@ -55,9 +55,8 @@ COVARIATE_COLS = [
     'ultosc', 'willr', 'obv', 'ht_dcphase',
     'atr', 'natr', 'bb_width', 'ema_cross',
     'candle_body', 'upper_wick', 'lower_wick',
-    'day_of_week',
+    'day_of_week','sentiment_index',
 ]
-
 
 # ═════════════════════════════════════════════════════════════════════════════
 #  1. DATA
@@ -130,6 +129,7 @@ def load_hf_model(hf_path, n_time_features):
         dropout=SETTINGS['dropout'],
         distribution_output='student_t',
         num_parallel_samples=200,
+        lags_sequence=[1, 2, 3, 4, 5, 6, 7],
     )
     model = TimeSeriesTransformerForPrediction(config).to(DEVICE)
     model.load_state_dict(torch.load(hf_path, map_location=DEVICE))
@@ -142,9 +142,19 @@ def load_hf_model(hf_path, n_time_features):
 #  3. HF DATASET + COLLATE
 # ═════════════════════════════════════════════════════════════════════════════
 class CryptoTimeSeriesDataset(Dataset):
+    """Sliding-window dataset that mirrors the TFT's train/val split."""
 
-    def __init__(self, df, context_length, prediction_length, covariate_cols):
-        self.samples = []
+    def __init__(
+        self,
+        df: pd.DataFrame,
+        context_length: int,
+        prediction_length: int,
+        covariate_cols: list[str],
+    ):
+        self.context_length    = context_length
+        self.prediction_length = prediction_length
+        self.samples           = []
+
         total_len = context_length + prediction_length
 
         for tic, grp in df.groupby('tic'):
@@ -153,26 +163,27 @@ class CryptoTimeSeriesDataset(Dataset):
 
             target = grp['close'].values.astype(np.float32)
             covs   = grp[covariate_cols].values.astype(np.float32)
-            means  = grp['scale_mean_close'].values.astype(np.float32)
-            stds   = grp['scale_std_close'].values.astype(np.float32)
+            means  = grp['scale_mean_close'].values.astype(np.float32)   # ← missing
+            stds   = grp['scale_std_close'].values.astype(np.float32)    # ← missing
             tidxs  = grp['time_idx'].values
+            MAX_LAG = 7
 
-            for start in range(n - total_len + 1):
-                end_ctx  = start + context_length
+            for start in range(n - total_len - MAX_LAG + 1):
+                end_ctx  = start + context_length + MAX_LAG
                 end_pred = end_ctx + prediction_length
 
                 self.samples.append({
                     'past_values'          : target[start:end_ctx],
                     'past_time_features'   : covs[start:end_ctx],
-                    'past_observed_mask'   : np.ones(context_length, dtype=np.float32),
+                    'past_observed_mask'   : np.ones(context_length + MAX_LAG, dtype=np.float32),
                     'future_values'        : target[end_ctx:end_pred],
                     'future_time_features' : covs[end_ctx:end_pred],
-                    'tic'                  : tic,
                     'origin_time_idx'      : int(tidxs[end_ctx - 1]),
-                    'scale_mean'           : float(means[end_ctx - 1]),
-                    'scale_std'            : float(stds[end_ctx - 1]),
+                    'tic'                  : tic,                          # ← missing
+                    'scale_mean'           : float(means[end_ctx - 1]),    # ← missing
+                    'scale_std'            : float(stds[end_ctx - 1]),     # ← missing
                 })
-
+                
     def __len__(self):
         return len(self.samples)
 
@@ -189,6 +200,7 @@ class CryptoTimeSeriesDataset(Dataset):
             'scale_mean'           : s['scale_mean'],
             'scale_std'            : s['scale_std'],
         }
+        
 
 
 def _collate(batch):
