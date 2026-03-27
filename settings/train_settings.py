@@ -21,3 +21,27 @@ SETTINGS = {
     'precision'                 : 'bf16-mixed',
     'accumulate_grad_batches'   : 1
 }
+
+
+# ── UPDATED HF-TST SETTINGS ──────────────────────────────────────────────────────────
+SETTINGS_TST = {
+    'batch_size'                : 1024,
+    'num_workers'               : 12,
+
+    'model_type'                : 'huggingface', 
+    'd_model'                   : 128,      
+    'encoder_layers'            : 4,        
+    'decoder_layers'            : 4,        
+    'attention_heads'           : 8,       
+    'd_ff'                      : 512,      
+    'activation_function'       : 'gelu',   
+    
+    'learning_rate'          : 0.0001,  
+    'dropout'                   : 0.3,     
+    'max_epochs'                : 100,
+    'early_stopping_patience'   : 12,       
+    'precision'                 : 'bf16-mixed',
+
+    'gradient_clip_val'         :0.1,
+    'reduce_on_plateau_patience': 3
+}

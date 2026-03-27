@@ -13,7 +13,7 @@ from huggingface_hub import HfApi, login
 
 from utils.cleaner import CleanerTS
 from scripts.tft_arch import prepare_tft_dataset
-from settings.train_settings import SETTINGS
+from settings.train_settings import SETTINGS_TST
 from utils.API import HF_TOKEN
 
 torch.set_float32_matmul_precision('high')
@@ -65,10 +65,10 @@ class CryptoTimeSeriesDataset(Dataset):
             target = grp['close'].values.astype(np.float32)
             covs   = grp[covariate_cols].values.astype(np.float32)
             tidxs  = grp['time_idx'].values
-            MAX_LAG = 7  # at the top of the file
+            MAX_LAG = 7  # at the top of the file            
 
-            # in __init__, replace the slicing:
             for start in range(n - total_len - MAX_LAG + 1):
+
                 end_ctx  = start + context_length + MAX_LAG
                 end_pred = end_ctx + prediction_length
 
@@ -79,7 +79,8 @@ class CryptoTimeSeriesDataset(Dataset):
                     'future_values'        : target[end_ctx:end_pred],
                     'future_time_features' : covs[end_ctx:end_pred],
                     'origin_time_idx'      : int(tidxs[end_ctx - 1]),
-                })
+                }) 
+
 
     def __len__(self):
         return len(self.samples)
@@ -130,18 +131,23 @@ def build_model(n_time_features: int) -> TimeSeriesTransformerForPrediction:
         context_length=MAX_ENCODER_LENGTH,
         input_size=1,
         num_time_features=n_time_features,
-        # architecture — capacity matched to TFT SETTINGS
-        d_model=SETTINGS['hidden_size'],
-        encoder_layers=SETTINGS['lstm_layers'],
-        decoder_layers=SETTINGS['lstm_layers'],
-        encoder_attention_heads=SETTINGS['attention_head_size'],
-        decoder_attention_heads=SETTINGS['attention_head_size'],
-        encoder_ffn_dim=SETTINGS['hidden_size'] * 2,
-        decoder_ffn_dim=SETTINGS['hidden_size'] * 2,
-        dropout=SETTINGS['dropout'],
-        # distributional output for quantile estimation
+        
+        # Architecture — Mapping to the dictionary
+        d_model=SETTINGS_TST['d_model'],
+        encoder_layers=SETTINGS_TST['encoder_layers'],
+        decoder_layers=SETTINGS_TST['decoder_layers'],
+        encoder_attention_heads=SETTINGS_TST['attention_heads'],
+        decoder_attention_heads=SETTINGS_TST['attention_heads'],
+        encoder_ffn_dim=SETTINGS_TST['d_ff'],
+        decoder_ffn_dim=SETTINGS_TST['d_ff'],
+        dropout=SETTINGS_TST['dropout'],
+        activation_function=SETTINGS_TST['activation_function'],
+
+        # Distributional settings — 'student_t' is excellent for heavy-tailed crypto data
         distribution_output='student_t',
         num_parallel_samples=200,
+        
+        # Lag sequence — [1..7] is perfect for catching weekly patterns in Binance data
         lags_sequence=[1, 2, 3, 4, 5, 6, 7]
     )
     return TimeSeriesTransformerForPrediction(config)
@@ -176,17 +182,17 @@ def train(prep_df: pd.DataFrame):
 
     train_dl = DataLoader(
         train_ds,
-        batch_size=SETTINGS['batch_size'],
+        batch_size=SETTINGS_TST['batch_size'],
         shuffle=True,
-        num_workers=SETTINGS['num_workers'],
+        num_workers=SETTINGS_TST['num_workers'],
         collate_fn=_collate,
         pin_memory=True,
     )
     val_dl = DataLoader(
         val_ds,
-        batch_size=SETTINGS['batch_size'],
+        batch_size=SETTINGS_TST['batch_size'],
         shuffle=False,
-        num_workers=SETTINGS['num_workers'],
+        num_workers=SETTINGS_TST['num_workers'],
         collate_fn=_collate,
         pin_memory=True,
     )
@@ -195,12 +201,12 @@ def train(prep_df: pd.DataFrame):
     model = build_model(n_time_features=len(covariate_cols)).to(DEVICE)
     optimizer = torch.optim.AdamW(
         model.parameters(),
-        lr=SETTINGS['learning_rate_hf'],
+        lr=SETTINGS_TST['learning_rate'],
         weight_decay=1e-3,
     )
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
-        patience=SETTINGS['reduce_on_plateau_patience'],
+        patience=SETTINGS_TST['reduce_on_plateau_patience'],
         factor=0.5,
     )
 
@@ -213,7 +219,7 @@ def train(prep_df: pd.DataFrame):
     history = {'epoch': [], 'train_loss': [], 'val_loss': [], 'lr': []}
 
     # ── training loop ─────────────────────────────────────────────────
-    for epoch in range(SETTINGS['max_epochs']):
+    for epoch in range(SETTINGS_TST['max_epochs']):
 
         # train
         model.train()
@@ -230,7 +236,7 @@ def train(prep_df: pd.DataFrame):
             loss = out.loss
             loss.backward()
             torch.nn.utils.clip_grad_norm_(
-                model.parameters(), SETTINGS['gradient_clip_val'],
+                model.parameters(), SETTINGS_TST['gradient_clip_val'],
             )
             optimizer.step()
             train_losses.append(loss.item())
@@ -260,7 +266,7 @@ def train(prep_df: pd.DataFrame):
         history['lr'].append(lr_now)
 
         print(
-            f'  Epoch {epoch+1:3d}/{SETTINGS["max_epochs"]}  '
+            f'  Epoch {epoch+1:3d}/{SETTINGS_TST["max_epochs"]}  '
             f'train={avg_train:.4f}  val={avg_val:.4f}  lr={lr_now:.2e}'
         )
 
@@ -273,7 +279,7 @@ def train(prep_df: pd.DataFrame):
             print(f'    ↳ new best val_loss={avg_val:.4f}  saved → {MODEL_PATH}')
         else:
             wait += 1
-            if wait >= SETTINGS['early_stopping_patience']:
+            if wait >= SETTINGS_TST['early_stopping_patience']:
                 print(f'  Early stopping at epoch {epoch+1}')
                 break
     
@@ -306,6 +312,6 @@ def upload_to_hf():
 #  ENTRY
 # ═════════════════════════════════════════════════════════════════════════════
 if __name__ == '__main__':
-    # prep_df = get_data()
-    # model   = train(prep_df)
+    prep_df = get_data()
+    model   = train(prep_df)
     upload_to_hf()

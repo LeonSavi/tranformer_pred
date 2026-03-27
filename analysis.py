@@ -16,7 +16,7 @@ from transformers import (
     TimeSeriesTransformerConfig,
     TimeSeriesTransformerForPrediction,
 )
-from settings.train_settings import SETTINGS
+from settings.train_settings import SETTINGS,SETTINGS_TST
 
 torch.set_float32_matmul_precision('high')
 plt.rcParams.update({
@@ -119,17 +119,24 @@ def load_hf_model(hf_path, n_time_features):
         context_length=MAX_ENCODER_LENGTH,
         input_size=1,
         num_time_features=n_time_features,
-        d_model=SETTINGS['hidden_size'],
-        encoder_layers=SETTINGS['lstm_layers'],
-        decoder_layers=SETTINGS['lstm_layers'],
-        encoder_attention_heads=SETTINGS['attention_head_size'],
-        decoder_attention_heads=SETTINGS['attention_head_size'],
-        encoder_ffn_dim=SETTINGS['hidden_size'] * 2,
-        decoder_ffn_dim=SETTINGS['hidden_size'] * 2,
-        dropout=SETTINGS['dropout'],
+        
+        # Architecture — Mapping to the dictionary
+        d_model=SETTINGS_TST['d_model'],
+        encoder_layers=SETTINGS_TST['encoder_layers'],
+        decoder_layers=SETTINGS_TST['decoder_layers'],
+        encoder_attention_heads=SETTINGS_TST['attention_heads'],
+        decoder_attention_heads=SETTINGS_TST['attention_heads'],
+        encoder_ffn_dim=SETTINGS_TST['d_ff'],
+        decoder_ffn_dim=SETTINGS_TST['d_ff'],
+        dropout=SETTINGS_TST['dropout'],
+        activation_function=SETTINGS_TST['activation_function'],
+
+        # Distributional settings — 'student_t' is excellent for heavy-tailed crypto data
         distribution_output='student_t',
         num_parallel_samples=200,
-        lags_sequence=[1, 2, 3, 4, 5, 6, 7],
+        
+        # Lag sequence — [1..7] is perfect for catching weekly patterns in Binance data
+        lags_sequence=[1, 2, 3, 4, 5, 6, 7]
     )
     model = TimeSeriesTransformerForPrediction(config).to(DEVICE)
     model.load_state_dict(torch.load(hf_path, map_location=DEVICE))
