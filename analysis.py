@@ -1,4 +1,4 @@
-# analysis.py — TFT vs HF Time Series Transformer: full comparison
+# analysis.py — Temp. Fusion T. vs Time Series T.: full comparison
 # ─────────────────────────────────────────────────────────────────────────────
 import os
 import torch
@@ -58,6 +58,12 @@ COVARIATE_COLS = [
     'day_of_week','sentiment_index',
 ]
 
+# Only day_of_week is truly known in advance.
+# All other covariates (RSI, MACD, ATR, …) are derived from future prices
+# and MUST NOT be passed as future_time_features during inference —
+# doing so leaks the answer to the model.
+KNOWN_FUTURE_COLS = ['day_of_week']
+
 # ═════════════════════════════════════════════════════════════════════════════
 #  1. DATA
 # ═════════════════════════════════════════════════════════════════════════════
@@ -87,19 +93,19 @@ def get_data():
 #  2. DOWNLOAD MODELS FROM HUGGINGFACE
 # ═════════════════════════════════════════════════════════════════════════════
 def download_models():
-    print('Downloading TFT checkpoint...')
+    print('Downloading Temp. Fusion T. checkpoint...')
     tft_path = hf_hub_download(
         repo_id=TFT_REPO_ID,
         filename=TFT_FILENAME,
         local_dir=MODEL_DIR,
     )
-    print('Downloading HF-TST weights...')
+    print('Downloading Time Series T. weights...')
     hf_path = hf_hub_download(
         repo_id=HF_REPO_ID,
         filename=HF_FILENAME,
         local_dir=MODEL_DIR,
     )
-    print(f'  TFT  → {tft_path}')
+    print(f'  Temp. Fusion T.  → {tft_path}')
     print(f'  HF   → {hf_path}')
     return tft_path, hf_path
 
@@ -109,7 +115,7 @@ def load_tft(tft_path):
         tft_path, map_location=DEVICE,
     )
     tft.eval()
-    print(f'TFT loaded  |  params: {sum(p.numel() for p in tft.parameters()):,}')
+    print(f'Temp. Fusion T. loaded  |  params: {sum(p.numel() for p in tft.parameters()):,}')
     return tft
 
 
@@ -133,7 +139,7 @@ def load_hf_model(hf_path, n_time_features):
 
         # Distributional settings — 'student_t' is excellent for heavy-tailed crypto data
         distribution_output='student_t',
-        num_parallel_samples=200,
+        num_parallel_samples=150,
         
         # Lag sequence — [1..7] is perfect for catching weekly patterns in Binance data
         lags_sequence=[1, 2, 3, 4, 5, 6, 7]
@@ -141,7 +147,7 @@ def load_hf_model(hf_path, n_time_features):
     model = TimeSeriesTransformerForPrediction(config).to(DEVICE)
     model.load_state_dict(torch.load(hf_path, map_location=DEVICE))
     model.eval()
-    print(f'HF-TST loaded  |  params: {sum(p.numel() for p in model.parameters()):,}')
+    print(f'Time Series T. loaded  |  params: {sum(p.numel() for p in model.parameters()):,}')
     return model
 
 
@@ -149,7 +155,7 @@ def load_hf_model(hf_path, n_time_features):
 #  3. HF DATASET + COLLATE
 # ═════════════════════════════════════════════════════════════════════════════
 class CryptoTimeSeriesDataset(Dataset):
-    """Sliding-window dataset that mirrors the TFT's train/val split."""
+    """Sliding-window dataset that mirrors the the train/val split."""
 
     def __init__(
         self,
@@ -170,8 +176,8 @@ class CryptoTimeSeriesDataset(Dataset):
 
             target = grp['close'].values.astype(np.float32)
             covs   = grp[covariate_cols].values.astype(np.float32)
-            means  = grp['scale_mean_close'].values.astype(np.float32)   # ← missing
-            stds   = grp['scale_std_close'].values.astype(np.float32)    # ← missing
+            means  = grp['scale_mean_close'].values.astype(np.float32)
+            stds   = grp['scale_std_close'].values.astype(np.float32)
             tidxs  = grp['time_idx'].values
             MAX_LAG = 7
 
@@ -186,9 +192,10 @@ class CryptoTimeSeriesDataset(Dataset):
                     'future_values'        : target[end_ctx:end_pred],
                     'future_time_features' : covs[end_ctx:end_pred],
                     'origin_time_idx'      : int(tidxs[end_ctx - 1]),
-                    'tic'                  : tic,                          # ← missing
-                    'scale_mean'           : float(means[end_ctx - 1]),    # ← missing
-                    'scale_std'            : float(stds[end_ctx - 1]),     # ← missing
+                    'tic'                  : tic,
+                    # FIX: store per-horizon scale params instead of origin-only
+                    'scale_means'          : means[end_ctx:end_pred].copy(),
+                    'scale_stds'           : stds[end_ctx:end_pred].copy(),
                 })
                 
     def __len__(self):
@@ -204,8 +211,9 @@ class CryptoTimeSeriesDataset(Dataset):
             'future_time_features' : torch.tensor(s['future_time_features']),
             'tic'                  : s['tic'],
             'origin_time_idx'      : s['origin_time_idx'],
-            'scale_mean'           : s['scale_mean'],
-            'scale_std'            : s['scale_std'],
+            # FIX: per-horizon arrays
+            'scale_means'          : torch.tensor(s['scale_means']),
+            'scale_stds'           : torch.tensor(s['scale_stds']),
         }
         
 
@@ -219,8 +227,9 @@ def _collate(batch):
         'future_time_features' : torch.stack([b['future_time_features'] for b in batch]),
         'tic'                  : [b['tic'] for b in batch],
         'origin_time_idx'      : [b['origin_time_idx'] for b in batch],
-        'scale_mean'           : [b['scale_mean'] for b in batch],
-        'scale_std'            : [b['scale_std'] for b in batch],
+        # FIX: stack per-horizon arrays
+        'scale_means'          : torch.stack([b['scale_means'] for b in batch]),
+        'scale_stds'           : torch.stack([b['scale_stds'] for b in batch]),
     }
 
 
@@ -246,37 +255,43 @@ def run_tft_backtest(tft, validation, prep_df):
         if origin.empty:
             continue
 
-        scale_mean = origin['scale_mean_close'].values[0]
-        scale_std  = origin['scale_std_close'].values[0]
-        preds      = predictions[i]
+        preds = predictions[i]
 
-        actuals = prep_df[
+        # FIX: look up future rows to get per-horizon scale params
+        future_rows = prep_df[
             (prep_df['tic'] == tic) &
             (prep_df['time_idx'] > time_idx) &
             (prep_df['time_idx'] <= time_idx + MAX_PRED_LENGTH)
-        ]['close'].values
+        ].sort_values('time_idx')
 
-        for h in range(min(MAX_PRED_LENGTH, len(actuals))):
+        for h in range(min(MAX_PRED_LENGTH, len(future_rows))):
+            fr   = future_rows.iloc[h]
+            sm_h = fr['scale_mean_close']
+            ss_h = fr['scale_std_close']
             p10, p50, p90 = preds[h].tolist()
             records.append({
                 'tic'           : tic,
                 'time_idx'      : time_idx + h + 1,
                 'horizon'       : h + 1,
-                'actual_scaled' : actuals[h],
+                'actual_scaled' : fr['close'],
                 'p50_scaled'    : p50,
-                'actual'        : actuals[h] * scale_std + scale_mean,
-                'p10'           : p10        * scale_std + scale_mean,
-                'p50'           : p50        * scale_std + scale_mean,
-                'p90'           : p90        * scale_std + scale_mean,
+                'actual'        : fr['close'] * ss_h + sm_h,
+                'p10'           : p10         * ss_h + sm_h,
+                'p50'           : p50         * ss_h + sm_h,
+                'p90'           : p90         * ss_h + sm_h,
             })
 
     df = pd.DataFrame(records)
-    print(f'TFT backtest: {len(df):,} predictions')
+    print(f'Temp. Fusion T. backtest: {len(df):,} predictions')
     return df
 
 
 def run_hf_backtest(model, prep_df, cutoff_time_idx):
     covariate_cols = [c for c in COVARIATE_COLS if c in prep_df.columns]
+
+    # FIX: identify which feature columns are known in advance
+    # All others (RSI, MACD, etc.) are derived from future prices → leak
+    known_idxs = [i for i, c in enumerate(covariate_cols) if c in KNOWN_FUTURE_COLS]
 
     ds = CryptoTimeSeriesDataset(
         prep_df, MAX_ENCODER_LENGTH, MAX_PRED_LENGTH, covariate_cols,
@@ -293,11 +308,20 @@ def run_hf_backtest(model, prep_df, cutoff_time_idx):
     records = []
     with torch.no_grad():
         for batch in dl:
+            # FIX: zero out price-derived features in future_time_features
+            # Only keep known-in-advance features (day_of_week).
+            # The model was trained with all features, so this will degrade
+            # performance — but it gives honest metrics without data leakage.
+            future_tf = batch['future_time_features'].clone()
+            mask = torch.ones(future_tf.shape[-1], dtype=torch.bool)
+            mask[known_idxs] = False
+            future_tf[:, :, mask] = 0.0
+
             out = model.generate(
                 past_values=batch['past_values'].to(DEVICE),
                 past_time_features=batch['past_time_features'].to(DEVICE),
                 past_observed_mask=batch['past_observed_mask'].to(DEVICE),
-                future_time_features=batch['future_time_features'].to(DEVICE),
+                future_time_features=future_tf.to(DEVICE),
             )
             samples = out.sequences.cpu().numpy()
 
@@ -308,26 +332,28 @@ def run_hf_backtest(model, prep_df, cutoff_time_idx):
             future_vals = batch['future_values'].numpy()
             tickers     = batch['tic']
             origins     = batch['origin_time_idx']
-            means       = batch['scale_mean']
-            stds        = batch['scale_std']
+            # FIX: per-horizon scale params
+            means_arr   = batch['scale_means'].numpy()
+            stds_arr    = batch['scale_stds'].numpy()
 
             for j in range(len(tickers)):
-                sm, ss = means[j], stds[j]
                 for h in range(MAX_PRED_LENGTH):
+                    sm_h = means_arr[j, h]
+                    ss_h = stds_arr[j, h]
                     records.append({
                         'tic'           : tickers[j],
                         'time_idx'      : origins[j] + h + 1,
                         'horizon'       : h + 1,
                         'actual_scaled' : future_vals[j, h],
                         'p50_scaled'    : p50[j, h],
-                        'actual'        : future_vals[j, h] * ss + sm,
-                        'p10'           : p10[j, h]         * ss + sm,
-                        'p50'           : p50[j, h]         * ss + sm,
-                        'p90'           : p90[j, h]         * ss + sm,
+                        'actual'        : future_vals[j, h] * ss_h + sm_h,
+                        'p10'           : p10[j, h]         * ss_h + sm_h,
+                        'p50'           : p50[j, h]         * ss_h + sm_h,
+                        'p90'           : p90[j, h]         * ss_h + sm_h,
                     })
 
     df = pd.DataFrame(records)
-    print(f'HF-TST backtest: {len(df):,} predictions')
+    print(f'Time Series T. backtest: {len(df):,} predictions')
     return df
 
 
@@ -340,17 +366,23 @@ def compute_metrics(results, label=''):
         err = grp['actual'] - grp['p50']
         mae  = err.abs().mean()
         rmse = (err ** 2).mean() ** 0.5
+        mape = (err.abs() / grp['actual'].abs().clip(lower=1e-8)).mean()
         coverage = ((grp['actual'] >= grp['p10']) &
                     (grp['actual'] <= grp['p90'])).mean()
 
-        actual_diff = grp['actual_scaled'].diff()
-        pred_diff   = grp['p50_scaled'].diff()
+        # FIX: directional accuracy on h=1 only, sorted by time_idx
+        # Using all horizons mixed together inflates accuracy because
+        # consecutive horizons within the same window trend together.
+        h1 = grp[grp['horizon'] == 1].sort_values('time_idx')
+        actual_diff = h1['actual_scaled'].diff()
+        pred_diff   = h1['p50_scaled'].diff()
         valid       = actual_diff.notna() & pred_diff.notna()
         dir_acc = ((actual_diff[valid] > 0) == (pred_diff[valid] > 0)).mean() \
                   if valid.sum() > 0 else np.nan
 
         rows.append({
             'tic': tic, 'mae': round(mae, 4), 'rmse': round(rmse, 4),
+            'mape': round(mape, 4),
             'p10_p90_coverage': round(coverage, 3),
             'directional_acc': round(dir_acc, 3),
         })
@@ -363,15 +395,28 @@ def compute_metrics(results, label=''):
 
 
 def compute_horizon_metrics(results):
+    # FIX: average per-ticker first, then across tickers — consistent
+    # with compute_metrics. Pooling all predictions together lets BTC
+    # (with ~$80k prices) dominate the MAE, making the overall MAE
+    # appear lower than t+1 MAE in the summary table.
     rows = []
-    for h, grp in results.groupby('horizon'):
-        err = grp['actual'] - grp['p50']
+    for h, h_grp in results.groupby('horizon'):
+        ticker_maes  = []
+        ticker_rmses = []
+        ticker_covs  = []
+        for tic, grp in h_grp.groupby('tic'):
+            err = grp['actual'] - grp['p50']
+            ticker_maes.append(err.abs().mean())
+            ticker_rmses.append((err ** 2).mean() ** 0.5)
+            ticker_covs.append(
+                ((grp['actual'] >= grp['p10']) &
+                 (grp['actual'] <= grp['p90'])).mean()
+            )
         rows.append({
             'horizon': int(h),
-            'mae': err.abs().mean(),
-            'rmse': (err ** 2).mean() ** 0.5,
-            'p10_p90_coverage': ((grp['actual'] >= grp['p10']) &
-                                  (grp['actual'] <= grp['p90'])).mean(),
+            'mae': np.mean(ticker_maes),
+            'rmse': np.mean(ticker_rmses),
+            'p10_p90_coverage': np.mean(ticker_covs),
         })
     return pd.DataFrame(rows)
 
@@ -385,7 +430,7 @@ def pinball_loss(results):
     return losses
 
 
-def diebold_mariano_test(res_a, res_b, label_a='TFT', label_b='HF-TST'):
+def diebold_mariano_test(res_a, res_b, label_a='Temp. Fusion T.', label_b='Time Series T.'):
     merged = res_a.merge(res_b, on=['tic', 'time_idx', 'horizon'], suffixes=('_a', '_b'))
     e_a = (merged['actual_a'] - merged['p50_a']) ** 2
     e_b = (merged['actual_b'] - merged['p50_b']) ** 2
@@ -409,7 +454,7 @@ def diebold_mariano_test(res_a, res_b, label_a='TFT', label_b='HF-TST'):
 # ═════════════════════════════════════════════════════════════════════════════
 
 def plot_t1_comparison(tft_res, hf_res, prep_df, tics=None, n_tics=4):
-    """Main paper figure — t+1: actual vs TFT vs HF-TST."""
+    """Main paper figure — t+1: actual vs Temp. Fusion T. vs Time Series T.."""
     tft_t1 = tft_res[tft_res['horizon'] == 1]
     hf_t1  = hf_res[hf_res['horizon'] == 1]
     tics   = tics or tft_t1['tic'].unique()[:n_tics]
@@ -429,10 +474,10 @@ def plot_t1_comparison(tft_res, hf_res, prep_df, tics=None, n_tics=4):
         hd = h['time_idx'].map(date_map)
 
         ax.fill_between(td, t['p10'].values, t['p90'].values,
-                        alpha=0.12, color='#1f77b4', label='TFT P10–P90')
+                        alpha=0.12, color='#1f77b4', label='Temp. Fusion T. P10–P90')
         ax.plot(td, t['actual'].values, color='black', lw=1.2, label='Actual')
-        ax.plot(td, t['p50'].values, color='#1f77b4', lw=1.0, label='TFT (t+1)')
-        ax.plot(hd, h['p50'].values, color='#d62728', lw=1.0, ls='--', label='HF-TST (t+1)')
+        ax.plot(td, t['p50'].values, color='#1f77b4', lw=1.0, label='Temp. Fusion T. (t+1)')
+        ax.plot(hd, h['p50'].values, color='#d62728', lw=1.0, ls='--', label='Time Series T. (t+1)')
 
         ax.set_title(tic, fontweight='bold')
         ax.legend(loc='upper left', framealpha=0.8)
@@ -440,7 +485,7 @@ def plot_t1_comparison(tft_res, hf_res, prep_df, tics=None, n_tics=4):
         ax.tick_params(axis='x', rotation=30)
 
     axes[-1].set_xlabel('Date')
-    fig.suptitle('t+1 Forecast — TFT vs Time Series Transformer',
+    fig.suptitle('t+1 Forecast — Temp. Fusion T. vs Time Series T.',
                  fontsize=14, fontweight='bold', y=1.01)
     plt.tight_layout()
     fig.savefig(f'{PLOT_DIR}/t1_comparison.png', bbox_inches='tight')
@@ -456,8 +501,8 @@ def plot_horizon_degradation(tft_h, hf_h):
         ['mae', 'rmse', 'p10_p90_coverage'],
         ['MAE', 'RMSE', 'P10–P90 Coverage'],
     ):
-        ax.plot(tft_h['horizon'], tft_h[col], 'o-', color='#1f77b4', label='TFT', lw=1.5)
-        ax.plot(hf_h['horizon'],  hf_h[col],  's--', color='#d62728', label='HF-TST', lw=1.5)
+        ax.plot(tft_h['horizon'], tft_h[col], 'o-', color='#1f77b4', label='Temp. Fusion T.', lw=1.5)
+        ax.plot(hf_h['horizon'],  hf_h[col],  's--', color='#d62728', label='Time Series T.', lw=1.5)
         ax.set_xlabel('Horizon (days)')
         ax.set_ylabel(label)
         ax.set_title(label)
@@ -472,7 +517,7 @@ def plot_horizon_degradation(tft_h, hf_h):
 
 
 def plot_ticker_scatter(tft_m, hf_m):
-    """Each dot = one ticker.  Below diagonal → TFT wins."""
+    """Each dot = one ticker.  Below diagonal → Temp. Fusion T. wins."""
     merged = tft_m.merge(hf_m, on='tic', suffixes=('_tft', '_hf'))
 
     fig, ax = plt.subplots(figsize=(7, 7))
@@ -482,14 +527,14 @@ def plot_ticker_scatter(tft_m, hf_m):
     lim = max(merged['mae_tft'].max(), merged['mae_hf'].max()) * 1.05
     ax.plot([0, lim], [0, lim], 'k--', lw=0.8, label='Equal')
     ax.set_xlim(0, lim); ax.set_ylim(0, lim)
-    ax.set_xlabel('TFT — MAE')
-    ax.set_ylabel('HF-TST — MAE')
+    ax.set_xlabel('Temp. Fusion T. — MAE')
+    ax.set_ylabel('Time Series T. — MAE')
     ax.set_title('Per-Ticker MAE', fontweight='bold')
     ax.set_aspect('equal')
     ax.legend()
 
     n_tft = (merged['mae_tft'] < merged['mae_hf']).sum()
-    ax.text(0.05, 0.92, f'TFT wins {n_tft}/{len(merged)} tickers',
+    ax.text(0.05, 0.92, f'Temp. Fusion T. wins {n_tft}/{len(merged)} tickers',
             transform=ax.transAxes, fontsize=10,
             bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
 
@@ -514,7 +559,7 @@ def plot_volatility_breakdown(tft_res, hf_res, prep_df):
     rmap = tmp[['tic', 'time_idx', 'regime']].drop_duplicates()
 
     rows = []
-    for label, res in [('TFT', tft_res), ('HF-TST', hf_res)]:
+    for label, res in [('Temp. Fusion T.', tft_res), ('Time Series T.', hf_res)]:
         m = res.merge(rmap, on=['tic', 'time_idx'], how='left')
         for regime, grp in m.groupby('regime'):
             rows.append({'model': label, 'regime': regime,
@@ -524,7 +569,7 @@ def plot_volatility_breakdown(tft_res, hf_res, prep_df):
     fig, ax = plt.subplots(figsize=(7, 5))
     x = np.arange(2)
     w = 0.3
-    for i, (mdl, clr) in enumerate([('TFT', '#1f77b4'), ('HF-TST', '#d62728')]):
+    for i, (mdl, clr) in enumerate([('Temp. Fusion T.', '#1f77b4'), ('Time Series T.', '#d62728')]):
         vals = vdf[vdf['model'] == mdl].sort_values('regime')['mae'].values
         ax.bar(x + i * w, vals, w, label=mdl, color=clr)
 
@@ -540,17 +585,19 @@ def plot_volatility_breakdown(tft_res, hf_res, prep_df):
 
 
 def plot_aggregate_comparison(tft_m, hf_m):
-    """Side-by-side bars: MAE, RMSE, Coverage, Dir Acc."""
-    agg_tft = tft_m[['mae', 'rmse', 'p10_p90_coverage', 'directional_acc']].mean()
-    agg_hf  = hf_m[['mae', 'rmse', 'p10_p90_coverage', 'directional_acc']].mean()
-    labels  = ['MAE', 'RMSE', 'P10-P90\nCoverage', 'Directional\nAccuracy']
+    """Side-by-side bars: MAE, MAPE, RMSE, Coverage, Dir Acc."""
+    agg_tft = tft_m[['mae', 'mape', 'rmse', 'p10_p90_coverage', 'directional_acc']].mean()
+    agg_hf  = hf_m[['mae', 'mape', 'rmse', 'p10_p90_coverage', 'directional_acc']].mean()
+    labels  = ['MAE', 'MAPE', 'RMSE', 'P10-P90\nCoverage', 'Directional\nAccuracy']
 
-    fig, axes = plt.subplots(1, 4, figsize=(14, 4))
+    fig, axes = plt.subplots(1, 5, figsize=(17, 4))
     for ax, lbl, tv, hv in zip(axes, labels, agg_tft.values, agg_hf.values):
-        bars = ax.bar(['TFT', 'HF-TST'], [tv, hv],
+        fmt = '%.1f%%' if lbl == 'MAPE' else '%.3f'
+        vals = [tv * 100, hv * 100] if lbl == 'MAPE' else [tv, hv]
+        bars = ax.bar(['Temp. Fusion T.', 'Time Series T.'], vals,
                       color=['#1f77b4', '#d62728'], width=0.5)
         ax.set_title(lbl, fontweight='bold')
-        ax.bar_label(bars, fmt='%.3f', fontsize=9)
+        ax.bar_label(bars, fmt=fmt, fontsize=9)
 
     fig.suptitle('Aggregate Metrics', fontsize=14, fontweight='bold', y=1.02)
     plt.tight_layout()
@@ -570,7 +617,7 @@ def save_summary_table(tft_m, hf_m, tft_h, hf_h, tft_pb, hf_pb, dm):
             'Pinball Loss', 't+1 MAE', 't+7 MAE',
             'DM Statistic', 'DM p-value',
         ],
-        'TFT': [
+        'Temp. Fusion T.': [
             f"{at['mae']:.4f}", f"{at['rmse']:.4f}",
             f"{at['p10_p90_coverage']:.3f}", f"{at['directional_acc']:.3f}",
             f"{tft_pb['mean']:.4f}",
@@ -578,7 +625,7 @@ def save_summary_table(tft_m, hf_m, tft_h, hf_h, tft_pb, hf_pb, dm):
             f"{tft_h[tft_h['horizon']==7]['mae'].values[0]:.4f}",
             f"{dm['dm_stat']:.4f}", f"{dm['p_value']:.6f}",
         ],
-        'HF-TST': [
+        'Time Series T.': [
             f"{ah['mae']:.4f}", f"{ah['rmse']:.4f}",
             f"{ah['p10_p90_coverage']:.3f}", f"{ah['directional_acc']:.3f}",
             f"{hf_pb['mean']:.4f}",
@@ -622,16 +669,16 @@ if __name__ == '__main__':
 
     # 5 — metrics
     print('\n══ Metrics ══')
-    tft_metrics = compute_metrics(tft_results, label='TFT')
-    hf_metrics  = compute_metrics(hf_results,  label='HF-TST')
+    tft_metrics = compute_metrics(tft_results, label='Temp. Fusion T.')
+    hf_metrics  = compute_metrics(hf_results,  label='Time Series T.')
 
     tft_horizon = compute_horizon_metrics(tft_results)
     hf_horizon  = compute_horizon_metrics(hf_results)
 
     tft_pinball = pinball_loss(tft_results)
     hf_pinball  = pinball_loss(hf_results)
-    print(f'\nPinball — TFT:    {tft_pinball}')
-    print(f'Pinball — HF-TST: {hf_pinball}')
+    print(f'\nPinball — Temp. Fusion T.:    {tft_pinball}')
+    print(f'Pinball — Time Series T.: {hf_pinball}')
 
     dm = diebold_mariano_test(tft_results, hf_results)
 

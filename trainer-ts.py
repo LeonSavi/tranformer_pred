@@ -29,7 +29,7 @@ REPO_ID            = 'LeoSavi/HF_TST_Crypto'
 
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-# covariates — same features the TFT sees
+# All covariates — used for past_time_features (all known at inference)
 COVARIATE_COLS = [
     'volume', 'rsi', 'macd', 'cci', 'dx', 'roc',
     'ultosc', 'willr', 'obv', 'ht_dcphase',
@@ -38,12 +38,22 @@ COVARIATE_COLS = [
     'day_of_week','sentiment_index',
 ]
 
+# Only these are truly known in advance — everything else is derived from
+# future prices and MUST be zeroed in future_time_features to avoid leakage.
+KNOWN_FUTURE_COLS = ['day_of_week']
+
 
 # ═════════════════════════════════════════════════════════════════════════════
 #  DATASET
 # ═════════════════════════════════════════════════════════════════════════════
 class CryptoTimeSeriesDataset(Dataset):
-    """Sliding-window dataset that mirrors the TFT's train/val split."""
+    """Sliding-window dataset with leak-free future_time_features.
+
+    past_time_features  → all covariates (known at inference time)
+    future_time_features → only known-in-advance features populated,
+                           price-derived features zeroed out.
+    Same dimensionality for both so num_time_features stays consistent.
+    """
 
     def __init__(
         self,
@@ -51,12 +61,16 @@ class CryptoTimeSeriesDataset(Dataset):
         context_length: int,
         prediction_length: int,
         covariate_cols: list[str],
+        known_future_cols: list[str],
     ):
         self.context_length    = context_length
         self.prediction_length = prediction_length
         self.samples           = []
 
         total_len = context_length + prediction_length
+
+        # Identify which column indices are known in advance
+        known_idxs = [i for i, c in enumerate(covariate_cols) if c in known_future_cols]
 
         for tic, grp in df.groupby('tic'):
             grp = grp.sort_values('time_idx').reset_index(drop=True)
@@ -65,21 +79,26 @@ class CryptoTimeSeriesDataset(Dataset):
             target = grp['close'].values.astype(np.float32)
             covs   = grp[covariate_cols].values.astype(np.float32)
             tidxs  = grp['time_idx'].values
-            MAX_LAG = 7  # at the top of the file            
+            MAX_LAG = 7
 
             for start in range(n - total_len - MAX_LAG + 1):
 
                 end_ctx  = start + context_length + MAX_LAG
                 end_pred = end_ctx + prediction_length
 
+                # FIX: zero out price-derived features in future_time_features
+                future_tf = np.zeros_like(covs[end_ctx:end_pred])
+                for idx in known_idxs:
+                    future_tf[:, idx] = covs[end_ctx:end_pred, idx]
+
                 self.samples.append({
-                    'past_values'          : target[start:end_ctx],          
+                    'past_values'          : target[start:end_ctx],
                     'past_time_features'   : covs[start:end_ctx],
                     'past_observed_mask'   : np.ones(context_length + MAX_LAG, dtype=np.float32),
                     'future_values'        : target[end_ctx:end_pred],
-                    'future_time_features' : covs[end_ctx:end_pred],
+                    'future_time_features' : future_tf,
                     'origin_time_idx'      : int(tidxs[end_ctx - 1]),
-                }) 
+                })
 
 
     def __len__(self):
@@ -145,7 +164,7 @@ def build_model(n_time_features: int) -> TimeSeriesTransformerForPrediction:
 
         # Distributional settings — 'student_t' is excellent for heavy-tailed crypto data
         distribution_output='student_t',
-        num_parallel_samples=200,
+        num_parallel_samples=128,
         
         # Lag sequence — [1..7] is perfect for catching weekly patterns in Binance data
         lags_sequence=[1, 2, 3, 4, 5, 6, 7]
@@ -166,12 +185,14 @@ def train(prep_df: pd.DataFrame):
     train_df = prep_df[prep_df['time_idx'] <= cutoff_time_idx].copy()
 
     train_ds = CryptoTimeSeriesDataset(
-        train_df, MAX_ENCODER_LENGTH, MAX_PRED_LENGTH, covariate_cols,
+        train_df, MAX_ENCODER_LENGTH, MAX_PRED_LENGTH,
+        covariate_cols, KNOWN_FUTURE_COLS,
     )
 
     # validation: windows whose prediction origin is after cutoff
     val_ds = CryptoTimeSeriesDataset(
-        prep_df, MAX_ENCODER_LENGTH, MAX_PRED_LENGTH, covariate_cols,
+        prep_df, MAX_ENCODER_LENGTH, MAX_PRED_LENGTH,
+        covariate_cols, KNOWN_FUTURE_COLS,
     )
     val_ds.samples = [
         s for s in val_ds.samples
