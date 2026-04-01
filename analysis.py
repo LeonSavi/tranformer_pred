@@ -139,7 +139,7 @@ def load_hf_model(hf_path, n_time_features):
 
         # Distributional settings — 'student_t' is excellent for heavy-tailed crypto data
         distribution_output='student_t',
-        num_parallel_samples=150,
+        num_parallel_samples=200,
         
         # Lag sequence — [1..7] is perfect for catching weekly patterns in Binance data
         lags_sequence=[1, 2, 3, 4, 5, 6, 7]
@@ -431,21 +431,22 @@ def pinball_loss(results):
 
 
 def compute_mase(results, label=''):
+    """MASE: model MAE / naïve random-walk MAE, per ticker (scaled domain)."""
     rows = []
     for tic, grp in results.groupby('tic'):
         grp = grp.sort_values('time_idx')
-        # Naive baseline: MAE of a random walk on the scaled target
         scaled_actual = grp['actual_scaled'].values
         naive_mae = np.abs(np.diff(scaled_actual)).mean()
         if naive_mae < 1e-8:
-            continue  # skip degenerate series
+            continue
         mae_scaled = (grp['actual_scaled'] - grp['p50_scaled']).abs().mean()
         rows.append({'tic': tic, 'mase': mae_scaled / naive_mae})
     df = pd.DataFrame(rows)
     if label:
         print(f'\nMASE — {label}: mean={df["mase"].mean():.4f}')
     return df
-    
+
+
 def diebold_mariano_test(res_a, res_b, label_a='Temp. Fusion T.', label_b='Time Series T.'):
     merged = res_a.merge(res_b, on=['tic', 'time_idx', 'horizon'], suffixes=('_a', '_b'))
     e_a = (merged['actual_a'] - merged['p50_a']) ** 2
@@ -560,30 +561,6 @@ def plot_ticker_scatter(tft_m, hf_m):
     plt.show()
 
 
-def plot_mase_comparison(tft_results, hf_results):
-    tft_mase = compute_mase(tft_results, label='Temp. Fusion T.')
-    hf_mase  = compute_mase(hf_results,  label='Time Series T.')
-
-    merged = tft_mase.merge(hf_mase, on='tic', suffixes=('_tft', '_hf'))
-    merged = merged.sort_values('mase_tft')
-
-    x = np.arange(len(merged))
-    w = 0.35
-    fig, ax = plt.subplots(figsize=(max(10, len(merged) * 0.4), 5))
-    ax.bar(x - w/2, merged['mase_tft'], w, label='Temp. Fusion T.', color='#1f77b4')
-    ax.bar(x + w/2, merged['mase_hf'],  w, label='Time Series T.',  color='#d62728')
-    ax.axhline(1.0, color='grey', lw=1.0, ls='--', label='Naïve baseline (MASE=1)')
-
-    ax.set_xticks(x)
-    ax.set_xticklabels(merged['tic'], rotation=45, ha='right', fontsize=8)
-    ax.set_ylabel('MASE')
-    ax.set_title('MASE per Ticker (lower = better; dashed = naïve)', fontweight='bold')
-    ax.legend()
-    plt.tight_layout()
-    fig.savefig(f'{PLOT_DIR}/mase_comparison.png', bbox_inches='tight')
-    print(f'Saved → {PLOT_DIR}/mase_comparison.png')
-    plt.show()
-
 def plot_volatility_breakdown(tft_res, hf_res, prep_df):
     """MAE split by high-vol / low-vol using NATR."""
     if 'natr' not in prep_df.columns:
@@ -646,20 +623,54 @@ def plot_aggregate_comparison(tft_m, hf_m):
     plt.show()
 
 
-def save_summary_table(tft_m, hf_m, tft_h, hf_h, tft_pb, hf_pb, dm):
+def plot_mase_comparison(tft_results, hf_results):
+    """Per-ticker MASE bar chart."""
+    tft_mase = compute_mase(tft_results, label='Temp. Fusion T.')
+    hf_mase  = compute_mase(hf_results,  label='Time Series T.')
+
+    merged = tft_mase.merge(hf_mase, on='tic', suffixes=('_tft', '_hf'))
+    merged = merged.sort_values('mase_tft')
+
+    x = np.arange(len(merged))
+    w = 0.35
+    fig, ax = plt.subplots(figsize=(max(10, len(merged) * 0.4), 5))
+    ax.bar(x - w/2, merged['mase_tft'], w, label='Temp. Fusion T.', color='#1f77b4')
+    ax.bar(x + w/2, merged['mase_hf'],  w, label='Time Series T.',  color='#d62728')
+    ax.axhline(1.0, color='grey', lw=1.0, ls='--', label='Naïve baseline (MASE=1)')
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(merged['tic'], rotation=45, ha='right', fontsize=8)
+    ax.set_ylabel('MASE')
+    ax.set_title('MASE per Ticker (lower = better; dashed = naïve)', fontweight='bold')
+    ax.legend()
+    plt.tight_layout()
+    fig.savefig(f'{PLOT_DIR}/mase_comparison.png', bbox_inches='tight')
+    print(f'Saved → {PLOT_DIR}/mase_comparison.png')
+    plt.show()
+
+
+def save_summary_table(tft_m, hf_m, tft_h, hf_h, tft_pb, hf_pb, dm,
+                       tft_results, hf_results):
     """CSV table ready for the paper."""
-    at = tft_m[['mae', 'rmse', 'p10_p90_coverage', 'directional_acc']].mean()
-    ah = hf_m[['mae', 'rmse', 'p10_p90_coverage', 'directional_acc']].mean()
+    at = tft_m[['mae', 'mape', 'rmse', 'p10_p90_coverage', 'directional_acc']].mean()
+    ah = hf_m[['mae', 'mape', 'rmse', 'p10_p90_coverage', 'directional_acc']].mean()
+
+    # Compute MASE from raw results
+    tft_mase_df = compute_mase(tft_results)
+    hf_mase_df  = compute_mase(hf_results)
+    tft_mase = tft_mase_df['mase'].mean()
+    hf_mase  = hf_mase_df['mase'].mean()
 
     summary = pd.DataFrame({
         'Metric': [
-            'MAE', 'RMSE', 'P10–P90 Coverage', 'Directional Accuracy',
+            'MAE', 'MAPE (%)', 'RMSE', 'MASE',
+            'P10–P90 Coverage', 'Directional Accuracy',
             'Pinball Loss', 't+1 MAE', 't+7 MAE',
-            'DM Statistic', 'DM p-value', 'MASE'
+            'DM Statistic', 'DM p-value',
         ],
         'Temp. Fusion T.': [
-            f"{at['mae']:.4f}", f"{at['rmse']:.4f}",
-            f"{tft_mase:.4f}",
+            f"{at['mae']:.4f}", f"{at['mape']*100:.2f}",
+            f"{at['rmse']:.4f}", f"{tft_mase:.4f}",
             f"{at['p10_p90_coverage']:.3f}", f"{at['directional_acc']:.3f}",
             f"{tft_pb['mean']:.4f}",
             f"{tft_h[tft_h['horizon']==1]['mae'].values[0]:.4f}",
@@ -667,8 +678,8 @@ def save_summary_table(tft_m, hf_m, tft_h, hf_h, tft_pb, hf_pb, dm):
             f"{dm['dm_stat']:.4f}", f"{dm['p_value']:.6f}",
         ],
         'Time Series T.': [
-            f"{ah['mae']:.4f}", f"{ah['rmse']:.4f}",
-            f"{hf_mase:.4f}",
+            f"{ah['mae']:.4f}", f"{ah['mape']*100:.2f}",
+            f"{ah['rmse']:.4f}", f"{hf_mase:.4f}",
             f"{ah['p10_p90_coverage']:.3f}", f"{ah['directional_acc']:.3f}",
             f"{hf_pb['mean']:.4f}",
             f"{hf_h[hf_h['horizon']==1]['mae'].values[0]:.4f}",
