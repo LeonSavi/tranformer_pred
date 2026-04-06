@@ -6,6 +6,7 @@ from lightning.pytorch.callbacks import EarlyStopping
 import torch
 import pandas as pd
 from utils.logger import TrainingHistoryLogger
+from utils.cleaner import MARKET_INDICATOR_COLS
 
 
 DEFAULT_SETTINGS = {
@@ -70,9 +71,10 @@ def prepare_tft_dataset(
             'atr', 'natr', 'bb_width', 'ema_cross',
             'candle_body', 'upper_wick', 'lower_wick',
             'sentiment_index',
-        ] + scale_cols,
-        time_varying_known_reals=['time_idx', 'day_of_week','month'],
-        # time_varying_known_categoricals=['is_weekend'],   # now a string column
+        ] + scale_cols + [c for c in MARKET_INDICATOR_COLS if c in df.columns],
+        time_varying_known_reals=[
+            'time_idx', 'day_of_week', 'month',
+        ] ,
         target_normalizer=TorchNormalizer(method='identity'),
         allow_missing_timesteps=True,
     )

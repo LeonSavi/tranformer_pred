@@ -14,6 +14,8 @@ from utils.API import HF_TOKEN
 from utils.logger import TrainingHistoryLogger
 from settings.train_settings import SETTINGS
 
+from utils.cleaner import MARKET_INDICATOR_COLS
+
 torch.set_float32_matmul_precision('high')
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -31,14 +33,10 @@ REPO_ID            = 'LeoSavi/TFT_Crypto'
 
 # ── 1. Clean & Scale ──────────────────────────────────────────────────────────
 def get_data() -> pd.DataFrame:
-    cleaner = CleanerTS(
-        dir=DATA_PATH,
-        window=7,
-        scaler_window=SCALER_WINDOW,
-    )
-    scaled_df = cleaner.run()           # clean → scale in one call
+    cleaner = CleanerTS(dir=DATA_PATH, window=7, scaler_window=SCALER_WINDOW)
+    scaled_df = cleaner.run(cutoff_date=CUTOFF_DATE)   # ← pass cutoff
     print(f'Data ready: {scaled_df.shape}  |  tickers: {scaled_df.tic.nunique()}')
-    return scaled_df, cleaner.scaler    # return scaler for inverse transform
+    return scaled_df, cleaner.scaler
 
 
 # ── 2. Train ──────────────────────────────────────────────────────────────────

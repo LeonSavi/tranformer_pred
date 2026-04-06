@@ -2,6 +2,16 @@
 import numpy as np
 import pandas as pd
 
+from sklearn.preprocessing import RobustScaler, StandardScaler
+import pickle
+
+# Which macro cols get which scaler
+ROBUST_MACRO_COLS   = ['VIX', 'RVOL_VIX', 'GPRT', 'HY_IG_spread',
+                        'HY_OAS_diff1', 'HY_OAS_diff5', 'GOLD']
+STANDARD_MACRO_COLS = ['DXY', 'DXY_diff1', 'DXY_diff5', 'T10Y2Y',
+                        'T10Y3M', 'VIX_term_slope', 'FF_surprise']
+PASSTHROUGH_MACRO   = ['Fear_Greed', 'yield_curve_inverted']  # already [0,1] or binary
+
 class CryptoRollingScaler:
     def __init__(self, window: int = 90, eps: float = 1e-8):
         self.window = window
@@ -64,3 +74,43 @@ class CryptoRollingScaler:
         scale_stds:  np.ndarray,
     ) -> np.ndarray:
         return predictions * scale_stds[:, None] + scale_means[:, None]
+    
+    def fit_transform_macro(
+        self,
+        df: pd.DataFrame,
+        cutoff_date: str,           # fit only on rows before this date
+    ) -> pd.DataFrame:
+        """
+        Fit macro scalers on train split, transform the full DataFrame.
+        Must be called AFTER fit_transform (price scaling).
+        """
+        df = df.copy()
+        train_mask = df['timestamp'] < pd.to_datetime(cutoff_date)
+
+        self.macro_scalers_ = {}
+
+        for col in ROBUST_MACRO_COLS:
+            if col not in df.columns:
+                continue
+            scaler = RobustScaler()
+            scaler.fit(df.loc[train_mask, [col]].fillna(0))
+            df[col] = scaler.transform(df[[col]].fillna(0))
+            self.macro_scalers_[col] = scaler
+
+        for col in STANDARD_MACRO_COLS:
+            if col not in df.columns:
+                continue
+            scaler = StandardScaler()
+            scaler.fit(df.loc[train_mask, [col]].fillna(0))
+            df[col] = scaler.transform(df[[col]].fillna(0))
+            self.macro_scalers_[col] = scaler
+
+        # passthrough cols need no scaling — already normalized in cleaner
+        print(f'  Macro scalers fitted on {train_mask.sum()} train rows, '
+            f'transformed {len(df)} total rows')
+        return df
+
+    def save_macro_scalers(self, path: str = 'outputs/macro_scalers.pkl'):
+        with open(path, 'wb') as f:
+            pickle.dump(self.macro_scalers_, f)
+        print(f'  Macro scalers saved to {path}')

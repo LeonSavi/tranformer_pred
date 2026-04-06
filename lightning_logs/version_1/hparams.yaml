@@ -1,4 +1,4 @@
-attention_head_size: 4
+attention_head_size: 16
 categorical_groups: {}
 causal_attention: true
 dataset_parameters:
@@ -754,7 +754,7 @@ dataset_parameters:
       warn: true
     tic: !!python/object:pytorch_forecasting.data.encoders.NaNLabelEncoder
       add_nan: false
-      classes_: &id006
+      classes_: &id005
         0GUSDT: 0
         1INCHUSDT: 1
         2ZUSDT: 2
@@ -1525,7 +1525,7 @@ dataset_parameters:
   predict_mode: false
   randomize_length: null
   scalers:
-    atr: !!python/object:sklearn.preprocessing._data.StandardScaler
+    DXY: !!python/object:sklearn.preprocessing._data.StandardScaler
       _sklearn_version: 1.8.0
       copy: true
       feature_names_in_: !!python/object/apply:numpy._core.multiarray._reconstruct
@@ -1554,7 +1554,7 @@ dataset_parameters:
           - -1
           - 63
         - false
-        - - atr
+        - - DXY
       mean_: !!python/object/apply:numpy._core.multiarray._reconstruct
         args:
         - *id001
@@ -1582,23 +1582,10 @@ dataset_parameters:
           - 0
         - false
         - !!binary |
-          cJdL3WKpNUA=
+          M/kJEUKo6j8=
       n_features_in_: 1
       n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
-      - &id004 !!python/object/apply:numpy.dtype
-        args:
-        - f8
-        - false
-        - true
-        state: !!python/tuple
-        - 3
-        - <
-        - null
-        - null
-        - null
-        - -1
-        - -1
-        - 0
+      - *id002
       - !!binary |
         AAAAAODGGkE=
       scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
@@ -1615,7 +1602,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          lMmQOs3kbkA=
+          cZdh8L3BBkA=
       var_: !!python/object/apply:numpy._core.multiarray._reconstruct
         args:
         - *id001
@@ -1630,7 +1617,973 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          +D92v2TT7UA=
+          /S8RKvouIEA=
+      with_mean: true
+      with_std: true
+    DXY_diff1: !!python/object:sklearn.preprocessing._data.StandardScaler
+      _sklearn_version: 1.8.0
+      copy: true
+      feature_names_in_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id003
+        - false
+        - - DXY_diff1
+      mean_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          U7jVJgccQL8=
+      n_features_in_: 1
+      n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
+      - *id002
+      - !!binary |
+        AAAAAODGGkE=
+      scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          u8jRaTA61z8=
+      var_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          2GfmZw/cwD8=
+      with_mean: true
+      with_std: true
+    DXY_diff5: !!python/object:sklearn.preprocessing._data.StandardScaler
+      _sklearn_version: 1.8.0
+      copy: true
+      feature_names_in_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id003
+        - false
+        - - DXY_diff5
+      mean_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          aCaL8AgjZL8=
+      n_features_in_: 1
+      n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
+      - *id002
+      - !!binary |
+        AAAAAODGGkE=
+      scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          srcFYwT46T8=
+      var_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          mmG4HgkT5T8=
+      with_mean: true
+      with_std: true
+    FF_surprise: !!python/object:sklearn.preprocessing._data.StandardScaler
+      _sklearn_version: 1.8.0
+      copy: true
+      feature_names_in_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id003
+        - false
+        - - FF_surprise
+      mean_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          BumJRQdoZT8=
+      n_features_in_: 1
+      n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
+      - *id002
+      - !!binary |
+        AAAAAODGGkE=
+      scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          Di9q1HoF7D8=
+      var_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          s6zz45eJ6D8=
+      with_mean: true
+      with_std: true
+    Fear_Greed: !!python/object:sklearn.preprocessing._data.StandardScaler
+      _sklearn_version: 1.8.0
+      copy: true
+      feature_names_in_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id003
+        - false
+        - - Fear_Greed
+      mean_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          kJd11TIq3z8=
+      n_features_in_: 1
+      n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
+      - *id002
+      - !!binary |
+        AAAAAODGGkE=
+      scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          A9pRarZuyz8=
+      var_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          ZO2U3VKEpz8=
+      with_mean: true
+      with_std: true
+    GOLD: !!python/object:sklearn.preprocessing._data.StandardScaler
+      _sklearn_version: 1.8.0
+      copy: true
+      feature_names_in_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id003
+        - false
+        - - GOLD
+      mean_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          zTu6JieKXUA=
+      n_features_in_: 1
+      n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
+      - *id002
+      - !!binary |
+        AAAAAODGGkE=
+      scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          56sIhwZMb0A=
+      var_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          HoujRAGc7kA=
+      with_mean: true
+      with_std: true
+    GPRT: !!python/object:sklearn.preprocessing._data.StandardScaler
+      _sklearn_version: 1.8.0
+      copy: true
+      feature_names_in_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id003
+        - false
+        - - GPRT
+      mean_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          KaeTAr/80T8=
+      n_features_in_: 1
+      n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
+      - *id002
+      - !!binary |
+        AAAAAODGGkE=
+      scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          R2MnWsUe8D8=
+      var_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          SRjj4cU98D8=
+      with_mean: true
+      with_std: true
+    HY_IG_spread: !!python/object:sklearn.preprocessing._data.StandardScaler
+      _sklearn_version: 1.8.0
+      copy: true
+      feature_names_in_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id003
+        - false
+        - - HY_IG_spread
+      mean_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          YFWo7zI8o78=
+      n_features_in_: 1
+      n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
+      - *id002
+      - !!binary |
+        AAAAAODGGkE=
+      scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          Y50VrbPg5z8=
+      var_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          4xw3ICzR4T8=
+      with_mean: true
+      with_std: true
+    HY_OAS_diff1: !!python/object:sklearn.preprocessing._data.StandardScaler
+      _sklearn_version: 1.8.0
+      copy: true
+      feature_names_in_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id003
+        - false
+        - - HY_OAS_diff1
+      mean_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          mQkasLKMgr8=
+      n_features_in_: 1
+      n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
+      - *id002
+      - !!binary |
+        AAAAAODGGkE=
+      scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          n8qFEqAk+T8=
+      var_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          5XI7CGTBA0A=
+      with_mean: true
+      with_std: true
+    HY_OAS_diff5: !!python/object:sklearn.preprocessing._data.StandardScaler
+      _sklearn_version: 1.8.0
+      copy: true
+      feature_names_in_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id003
+        - false
+        - - HY_OAS_diff5
+      mean_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          f4uT5OhKpT8=
+      n_features_in_: 1
+      n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
+      - *id002
+      - !!binary |
+        AAAAAODGGkE=
+      scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          CIOEwWRl8T8=
+      var_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          hTu/pfjp8j8=
+      with_mean: true
+      with_std: true
+    RVOL_VIX: !!python/object:sklearn.preprocessing._data.StandardScaler
+      _sklearn_version: 1.8.0
+      copy: true
+      feature_names_in_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id003
+        - false
+        - - RVOL_VIX
+      mean_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          8Kz6PREY2j8=
+      n_features_in_: 1
+      n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
+      - *id002
+      - !!binary |
+        AAAAAODGGkE=
+      scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          1ZNCU8wF8z8=
+      var_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          iXWjX8ed9j8=
+      with_mean: true
+      with_std: true
+    T10Y2Y: !!python/object:sklearn.preprocessing._data.StandardScaler
+      _sklearn_version: 1.8.0
+      copy: true
+      feature_names_in_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id003
+        - false
+        - - T10Y2Y
+      mean_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          YFykeeKQ0D8=
+      n_features_in_: 1
+      n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
+      - *id002
+      - !!binary |
+        AAAAAODGGkE=
+      scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          MhI/ck/Q7T8=
+      var_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          lsKkCNzG6z8=
+      with_mean: true
+      with_std: true
+    VIX: !!python/object:sklearn.preprocessing._data.StandardScaler
+      _sklearn_version: 1.8.0
+      copy: true
+      feature_names_in_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id003
+        - false
+        - - VIX
+      mean_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          l/+N3f5owz8=
+      n_features_in_: 1
+      n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
+      - *id002
+      - !!binary |
+        AAAAAODGGkE=
+      scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          iIcnlFbn5z8=
+      var_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          iwze3xTb4T8=
+      with_mean: true
+      with_std: true
+    VIX_term_slope: !!python/object:sklearn.preprocessing._data.StandardScaler
+      _sklearn_version: 1.8.0
+      copy: true
+      feature_names_in_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id003
+        - false
+        - - VIX_term_slope
+      mean_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          f1evDNkFpL8=
+      n_features_in_: 1
+      n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
+      - *id002
+      - !!binary |
+        AAAAAODGGkE=
+      scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          5MYsRsRY8T8=
+      var_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          rcuKjY3O8j8=
+      with_mean: true
+      with_std: true
+    atr: !!python/object:sklearn.preprocessing._data.StandardScaler
+      _sklearn_version: 1.8.0
+      copy: true
+      feature_names_in_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id003
+        - false
+        - - atr
+      mean_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          ISxj5mKpNUA=
+      n_features_in_: 1
+      n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
+      - *id002
+      - !!binary |
+        AAAAAODGGkE=
+      scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          EbVmOs3kbkA=
+      var_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          wv8kv2TT7UA=
       with_mean: true
       with_std: true
     bb_width: !!python/object:sklearn.preprocessing._data.StandardScaler
@@ -1664,10 +2617,10 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          2KeP4M6g1T8=
+          +6JV37ig1T8=
       n_features_in_: 1
       n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
-      - *id004
+      - *id002
       - !!binary |
         AAAAAODGGkE=
       scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
@@ -1684,7 +2637,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          /RtbiUUI0D8=
+          MICUQV0H0D8=
       var_: !!python/object/apply:numpy._core.multiarray._reconstruct
         args:
         - *id001
@@ -1699,7 +2652,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          Y8htWY8QsD8=
+          vO3h5r0OsD8=
       with_mean: true
       with_std: true
     candle_body: !!python/object:sklearn.preprocessing._data.StandardScaler
@@ -1733,10 +2686,10 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          aC3rYiYDyz8=
+          fcDKiekDyz8=
       n_features_in_: 1
       n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
-      - *id004
+      - *id002
       - !!binary |
         AAAAAODGGkE=
       scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
@@ -1753,7 +2706,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          OJedSYmXY0A=
+          8Kk9SomXY0A=
       var_: !!python/object/apply:numpy._core.multiarray._reconstruct
         args:
         - *id001
@@ -1768,7 +2721,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          qcO9QoH910A=
+          OchFRIH910A=
       with_mean: true
       with_std: true
     cci: !!python/object:sklearn.preprocessing._data.StandardScaler
@@ -1802,10 +2755,10 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          IiKnMJILKsA=
+          7S5Q8t4JKsA=
       n_features_in_: 1
       n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
-      - *id004
+      - *id002
       - !!binary |
         AAAAAODGGkE=
       scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
@@ -1822,7 +2775,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          PnHUYhtuXEA=
+          RbJmF/htXEA=
       var_: !!python/object/apply:numpy._core.multiarray._reconstruct
         args:
         - *id001
@@ -1837,7 +2790,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          r6pSySpCyUA=
+          YY6WEuxByUA=
       with_mean: true
       with_std: true
     day_of_week: !!python/object:sklearn.preprocessing._data.StandardScaler
@@ -1874,7 +2827,7 @@ dataset_parameters:
           9v83/CUBCEA=
       n_features_in_: 1
       n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
-      - *id004
+      - *id002
       - !!binary |
         AAAAAODGGkE=
       scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
@@ -1940,10 +2893,10 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          euy/wM47PEA=
+          YMPbad07PEA=
       n_features_in_: 1
       n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
-      - *id004
+      - *id002
       - !!binary |
         AAAAAODGGkE=
       scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
@@ -1960,7 +2913,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          kv+q+eHdM0A=
+          Jq6x//vdM0A=
       var_: !!python/object/apply:numpy._core.multiarray._reconstruct
         args:
         - *id001
@@ -1975,7 +2928,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          8L/+r/2qeEA=
+          YYA+UD6reEA=
       with_mean: true
       with_std: true
     ema_cross: !!python/object:sklearn.preprocessing._data.StandardScaler
@@ -2009,10 +2962,10 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          TVCrKdM8DUA=
+          Ok2o49E8DUA=
       n_features_in_: 1
       n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
-      - *id004
+      - *id002
       - !!binary |
         AAAAAODGGkE=
       scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
@@ -2029,7 +2982,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          Zj3snePzbkA=
+          c4r1nePzbkA=
       var_: !!python/object/apply:numpy._core.multiarray._reconstruct
         args:
         - *id001
@@ -2044,7 +2997,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          lnJcl43w7UA=
+          1nBul43w7UA=
       with_mean: true
       with_std: true
     ht_dcphase: !!python/object:sklearn.preprocessing._data.StandardScaler
@@ -2078,10 +3031,10 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          8nw90CHhWkA=
+          o/O1RCThWkA=
       n_features_in_: 1
       n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
-      - *id004
+      - *id002
       - !!binary |
         AAAAAODGGkE=
       scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
@@ -2098,7 +3051,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          Xms1aVQsWUA=
+          r5p6qWQsWUA=
       var_: !!python/object/apply:numpy._core.multiarray._reconstruct
         args:
         - *id001
@@ -2113,7 +3066,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          XXRjTYHNw0A=
+          m0ne3prNw0A=
       with_mean: true
       with_std: true
     lower_wick: !!python/object:sklearn.preprocessing._data.StandardScaler
@@ -2147,10 +3100,10 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          hQwyt0qzGUA=
+          8wO+b0uzGUA=
       n_features_in_: 1
       n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
-      - *id004
+      - *id002
       - !!binary |
         AAAAAODGGkE=
       scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
@@ -2167,7 +3120,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          TsI933+iaUA=
+          NSMR33+iaUA=
       var_: !!python/object/apply:numpy._core.multiarray._reconstruct
         args:
         - *id001
@@ -2182,7 +3135,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          +cqD/SCJ5EA=
+          M008/SCJ5EA=
       with_mean: true
       with_std: true
     macd: !!python/object:sklearn.preprocessing._data.StandardScaler
@@ -2216,10 +3169,10 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          KTw+jcJZ+z8=
+          98oTlLFZ+z8=
       n_features_in_: 1
       n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
-      - *id004
+      - *id002
       - !!binary |
         AAAAAODGGkE=
       scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
@@ -2236,7 +3189,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          q2vrZTgbZEA=
+          JpDkaDgbZEA=
       var_: !!python/object/apply:numpy._core.multiarray._reconstruct
         args:
         - *id001
@@ -2251,7 +3204,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          sFPrTTtE2UA=
+          tUxkVTtE2UA=
       with_mean: true
       with_std: true
     month: !!python/object:sklearn.preprocessing._data.StandardScaler
@@ -2288,7 +3241,7 @@ dataset_parameters:
           sQQFG7wvGkA=
       n_features_in_: 1
       n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
-      - *id004
+      - *id002
       - !!binary |
         AAAAAODGGkE=
       scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
@@ -2354,10 +3307,10 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          QE2xpbjWe0A=
+          9x5n4wrZe0A=
       n_features_in_: 1
       n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
-      - *id004
+      - *id002
       - !!binary |
         AAAAAODGGkE=
       scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
@@ -2374,7 +3327,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          oTNA336/8EA=
+          +lfHVcbB8EA=
       var_: !!python/object/apply:numpy._core.multiarray._reconstruct
         args:
         - *id001
@@ -2389,7 +3342,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          cYyAp/GH8UE=
+          8KX+dbeM8UE=
       with_mean: true
       with_std: true
     obv: !!python/object:sklearn.preprocessing._data.StandardScaler
@@ -2423,10 +3376,10 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          k8WInh5q4D8=
+          EjCBHMZr4D8=
       n_features_in_: 1
       n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
-      - *id004
+      - *id002
       - !!binary |
         AAAAAODGGkE=
       scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
@@ -2443,7 +3396,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          O4xEliU/AUA=
+          COWJIwsVAUA=
       var_: !!python/object/apply:numpy._core.multiarray._reconstruct
         args:
         - *id001
@@ -2458,7 +3411,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          TlKpFymXEkA=
+          1hHKWNM8EkA=
       with_mean: true
       with_std: true
     roc: !!python/object:sklearn.preprocessing._data.StandardScaler
@@ -2492,10 +3445,10 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          WYNdCRnfJkA=
+          b4A6ZBDfJkA=
       n_features_in_: 1
       n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
-      - *id004
+      - *id002
       - !!binary |
         AAAAAODGGkE=
       scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
@@ -2512,7 +3465,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          iXcEi9cuuUA=
+          X8UOi9cuuUA=
       var_: !!python/object/apply:numpy._core.multiarray._reconstruct
         args:
         - *id001
@@ -2527,7 +3480,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          Bn6SWnXRg0E=
+          z7WiWnXRg0E=
       with_mean: true
       with_std: true
     rsi: !!python/object:sklearn.preprocessing._data.StandardScaler
@@ -2561,10 +3514,10 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          uSqz04rTR0A=
+          ACkdbo3TR0A=
       n_features_in_: 1
       n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
-      - *id004
+      - *id002
       - !!binary |
         AAAAAODGGkE=
       scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
@@ -2581,7 +3534,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          q97407iKJ0A=
+          z/HSraiKJ0A=
       var_: !!python/object/apply:numpy._core.multiarray._reconstruct
         args:
         - *id001
@@ -2596,7 +3549,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          wI0FD8NRYUA=
+          1pszTKtRYUA=
       with_mean: true
       with_std: true
     scale_mean_close: !!python/object:sklearn.preprocessing._data.StandardScaler
@@ -2630,10 +3583,10 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          pI5piDxceUA=
+          sAeddzxceUA=
       n_features_in_: 1
       n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
-      - *id004
+      - *id002
       - !!binary |
         AAAAAODGGkE=
       scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
@@ -2650,7 +3603,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          xvAoyr/esUA=
+          mTQ/yr/esUA=
       var_: !!python/object/apply:numpy._core.multiarray._reconstruct
         args:
         - *id001
@@ -2665,7 +3618,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          S+S7oHT1c0E=
+          WqDtoHT1c0E=
       with_mean: true
       with_std: true
     scale_mean_obv: !!python/object:sklearn.preprocessing._data.StandardScaler
@@ -2699,10 +3652,10 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          g0PlU7ILbUI=
+          ZP37+bILbUI=
       n_features_in_: 1
       n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
-      - *id004
+      - *id002
       - !!binary |
         AAAAAODGGkE=
       scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
@@ -2719,7 +3672,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          w5lQTjhPtEI=
+          +6EFTjhPtEI=
       var_: !!python/object/apply:numpy._core.multiarray._reconstruct
         args:
         - *id001
@@ -2734,7 +3687,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          CQKVAJXHeUU=
+          OLDW/5THeUU=
       with_mean: true
       with_std: true
     scale_mean_volume: !!python/object:sklearn.preprocessing._data.StandardScaler
@@ -2768,10 +3721,10 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          dW0cxkOOA0I=
+          gY1qTlKOA0I=
       n_features_in_: 1
       n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
-      - *id004
+      - *id002
       - !!binary |
         AAAAAODGGkE=
       scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
@@ -2788,7 +3741,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          P3LWC0ViSUI=
+          WgM4E0ViSUI=
       var_: !!python/object/apply:numpy._core.multiarray._reconstruct
         args:
         - *id001
@@ -2803,7 +3756,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          EI/8qbkipEQ=
+          P1eytbkipEQ=
       with_mean: true
       with_std: true
     scale_std_close: !!python/object:sklearn.preprocessing._data.StandardScaler
@@ -2837,10 +3790,10 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          x2iLgPJ7SEA=
+          dTeWvvJ7SEA=
       n_features_in_: 1
       n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
-      - *id004
+      - *id002
       - !!binary |
         AAAAAODGGkE=
       scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
@@ -2857,7 +3810,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          NQij2RHfgEA=
+          ZnHD2RHfgEA=
       var_: !!python/object/apply:numpy._core.multiarray._reconstruct
         args:
         - *id001
@@ -2872,7 +3825,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          +prstEnKEUE=
+          GPUwtUnKEUE=
       with_mean: true
       with_std: true
     scale_std_obv: !!python/object:sklearn.preprocessing._data.StandardScaler
@@ -2906,10 +3859,10 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          yR4djZUPL0I=
+          HE509IsPL0I=
       n_features_in_: 1
       n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
-      - *id004
+      - *id002
       - !!binary |
         AAAAAODGGkE=
       scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
@@ -2926,7 +3879,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          xq2l3dxTfEI=
+          Cndp2dxTfEI=
       var_: !!python/object/apply:numpy._core.multiarray._reconstruct
         args:
         - *id001
@@ -2941,7 +3894,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          NimUS54TCUU=
+          m5YURJ4TCUU=
       with_mean: true
       with_std: true
     scale_std_volume: !!python/object:sklearn.preprocessing._data.StandardScaler
@@ -2975,10 +3928,10 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          pd6+440aCEI=
+          kIO5XaMaCEI=
       n_features_in_: 1
       n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
-      - *id004
+      - *id002
       - !!binary |
         AAAAAODGGkE=
       scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
@@ -2995,7 +3948,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          N0FFCkIqU0I=
+          vqhBGEIqU0I=
       var_: !!python/object/apply:numpy._core.multiarray._reconstruct
         args:
         - *id001
@@ -3010,7 +3963,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          O/sqdMz0tkQ=
+          u1Gslcz0tkQ=
       with_mean: true
       with_std: true
     sentiment_index: !!python/object:sklearn.preprocessing._data.StandardScaler
@@ -3044,10 +3997,10 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          KX+a8dCjSEA=
+          pgoDWNqjSEA=
       n_features_in_: 1
       n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
-      - *id004
+      - *id002
       - !!binary |
         AAAAAODGGkE=
       scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
@@ -3064,7 +4017,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          uxzZgBJiOkA=
+          a3EUdxFiOkA=
       var_: !!python/object/apply:numpy._core.multiarray._reconstruct
         args:
         - *id001
@@ -3079,7 +4032,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          e7PAoorAhUA=
+          xR2E7IjAhUA=
       with_mean: true
       with_std: true
     time_idx: !!python/object:sklearn.preprocessing._data.StandardScaler
@@ -3116,7 +4069,7 @@ dataset_parameters:
           w7Jt8yKiikA=
       n_features_in_: 1
       n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
-      - *id004
+      - *id002
       - !!binary |
         AAAAAODGGkE=
       scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
@@ -3182,10 +4135,10 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          VmGzjaPgR0A=
+          KK37qaDgR0A=
       n_features_in_: 1
       n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
-      - *id004
+      - *id002
       - !!binary |
         AAAAAODGGkE=
       scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
@@ -3202,7 +4155,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          Rp0ylr6bIkA=
+          B+ksJdSbIkA=
       var_: !!python/object/apply:numpy._core.multiarray._reconstruct
         args:
         - *id001
@@ -3217,7 +4170,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          OCtu11ikVUA=
+          8Cvy/IqkVUA=
       with_mean: true
       with_std: true
     upper_wick: !!python/object:sklearn.preprocessing._data.StandardScaler
@@ -3251,10 +4204,10 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          m17EP5QgFUA=
+          i9uHoZIgFUA=
       n_features_in_: 1
       n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
-      - *id004
+      - *id002
       - !!binary |
         AAAAAODGGkE=
       scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
@@ -3271,7 +4224,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          WBbms24cVEA=
+          aHVOtG4cVEA=
       var_: !!python/object/apply:numpy._core.multiarray._reconstruct
         args:
         - *id001
@@ -3286,7 +4239,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          rc4ySEdHuUA=
+          Ri85SUdHuUA=
       with_mean: true
       with_std: true
     volume: !!python/object:sklearn.preprocessing._data.StandardScaler
@@ -3320,10 +4273,10 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          OOPejbo0tj8=
+          LJy03INEtj8=
       n_features_in_: 1
       n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
-      - *id004
+      - *id002
       - !!binary |
         AAAAAODGGkE=
       scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
@@ -3340,7 +4293,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          rf/JhmBbB0A=
+          N3uyB3wBCEA=
       var_: !!python/object/apply:numpy._core.multiarray._reconstruct
         args:
         - *id001
@@ -3355,7 +4308,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          Wifkr18MIUA=
+          o+8sHToCIkA=
       with_mean: true
       with_std: true
     willr: !!python/object:sklearn.preprocessing._data.StandardScaler
@@ -3389,10 +4342,10 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          wNkFz0STTMA=
+          JAXDa0KTTMA=
       n_features_in_: 1
       n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
-      - *id004
+      - *id002
       - !!binary |
         AAAAAODGGkE=
       scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
@@ -3409,7 +4362,7 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          YRaguqptOkA=
+          F/0Yu61tOkA=
       var_: !!python/object/apply:numpy._core.multiarray._reconstruct
         args:
         - *id001
@@ -3424,14 +4377,83 @@ dataset_parameters:
         - *id002
         - false
         - !!binary |
-          HGrqRa3ThUA=
+          xmhCO7LThUA=
+      with_mean: true
+      with_std: true
+    yield_curve_inverted: !!python/object:sklearn.preprocessing._data.StandardScaler
+      _sklearn_version: 1.8.0
+      copy: true
+      feature_names_in_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id003
+        - false
+        - - yield_curve_inverted
+      mean_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          1F6KAfob2T8=
+      n_features_in_: 1
+      n_samples_seen_: !!python/object/apply:numpy._core.multiarray.scalar
+      - *id002
+      - !!binary |
+        AAAAAODGGkE=
+      scale_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          VDqkXdE/3z8=
+      var_: !!python/object/apply:numpy._core.multiarray._reconstruct
+        args:
+        - *id001
+        - !!python/tuple
+          - 0
+        - !!binary |
+          Yg==
+        state: !!python/tuple
+        - 1
+        - !!python/tuple
+          - 1
+        - *id002
+        - false
+        - !!binary |
+          67co6ySEzj8=
       with_mean: true
       with_std: true
   static_categoricals:
   - tic
   static_reals: null
   target: close
-  target_normalizer: &id007 !!python/object:pytorch_forecasting.data.encoders.TorchNormalizer
+  target_normalizer: &id006 !!python/object:pytorch_forecasting.data.encoders.TorchNormalizer
     _method_kwargs: {}
     center: true
     center_: !!python/object/apply:numpy._core.multiarray._reconstruct
@@ -3444,7 +4466,7 @@ dataset_parameters:
       state: !!python/tuple
       - 1
       - !!python/tuple []
-      - &id005 !!python/object/apply:numpy.dtype
+      - &id004 !!python/object/apply:numpy.dtype
         args:
         - f4
         - false
@@ -3473,7 +4495,7 @@ dataset_parameters:
       state: !!python/tuple
       - 1
       - !!python/tuple []
-      - *id005
+      - *id004
       - false
       - !!binary |
         AACAPw==
@@ -3511,11 +4533,26 @@ dataset_parameters:
   - scale_std_volume
   - scale_mean_obv
   - scale_std_obv
+  - VIX
+  - HY_OAS_diff1
+  - HY_OAS_diff5
+  - DXY
+  - DXY_diff1
+  - DXY_diff5
+  - T10Y2Y
+  - Fear_Greed
+  - RVOL_VIX
+  - VIX_term_slope
+  - HY_IG_spread
+  - GOLD
+  - yield_curve_inverted
+  - GPRT
+  - FF_surprise
   variable_groups: null
   weight: null
 dropout: 0.3
 embedding_labels:
-  tic: *id006
+  tic: *id005
 embedding_paddings: []
 embedding_sizes:
   tic: !!python/tuple
@@ -3535,7 +4572,7 @@ monotone_constraints: {}
 optimizer: adam
 optimizer_params: null
 output_size: 3
-output_transformer: *id007
+output_transformer: *id006
 reduce_on_plateau_min_lr: 1.0e-05
 reduce_on_plateau_patience: 3
 reduce_on_plateau_reduction: 2.0
@@ -3578,6 +4615,21 @@ time_varying_reals_encoder:
 - scale_std_volume
 - scale_mean_obv
 - scale_std_obv
+- VIX
+- HY_OAS_diff1
+- HY_OAS_diff5
+- DXY
+- DXY_diff1
+- DXY_diff5
+- T10Y2Y
+- Fear_Greed
+- RVOL_VIX
+- VIX_term_slope
+- HY_IG_spread
+- GOLD
+- yield_curve_inverted
+- GPRT
+- FF_surprise
 weight_decay: 0.0
 x_categoricals:
 - tic
@@ -3610,3 +4662,18 @@ x_reals:
 - scale_std_volume
 - scale_mean_obv
 - scale_std_obv
+- VIX
+- HY_OAS_diff1
+- HY_OAS_diff5
+- DXY
+- DXY_diff1
+- DXY_diff5
+- T10Y2Y
+- Fear_Greed
+- RVOL_VIX
+- VIX_term_slope
+- HY_IG_spread
+- GOLD
+- yield_curve_inverted
+- GPRT
+- FF_surprise

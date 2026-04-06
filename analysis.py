@@ -17,6 +17,8 @@ from transformers import (
     TimeSeriesTransformerForPrediction,
 )
 from settings.train_settings import SETTINGS,SETTINGS_TST
+from utils.cleaner import MARKET_INDICATOR_COLS
+
 
 torch.set_float32_matmul_precision('high')
 plt.rcParams.update({
@@ -55,14 +57,15 @@ COVARIATE_COLS = [
     'ultosc', 'willr', 'obv', 'ht_dcphase',
     'atr', 'natr', 'bb_width', 'ema_cross',
     'candle_body', 'upper_wick', 'lower_wick',
-    'day_of_week','sentiment_index',
-]
+    'sentiment_index',
+    'day_of_week', 'month',         # calendar — matches TFT's known reals
+] + MARKET_INDICATOR_COLS           # macro indicators — matches TFT's unknown reals
 
-# Only day_of_week is truly known in advance.
-# All other covariates (RSI, MACD, ATR, …) are derived from future prices
-# and MUST NOT be passed as future_time_features during inference —
-# doing so leaks the answer to the model.
-KNOWN_FUTURE_COLS = ['day_of_week']
+
+# Only these are truly known in advance — everything else is derived from
+# future prices and MUST be zeroed in future_time_features to avoid leakage.
+KNOWN_FUTURE_COLS = ['day_of_week', 'month']
+
 
 # ═════════════════════════════════════════════════════════════════════════════
 #  1. DATA
@@ -237,27 +240,14 @@ def _collate(batch):
 #  4. BACKTESTS
 # ═════════════════════════════════════════════════════════════════════════════
 def run_tft_backtest(tft, validation, prep_df):
-    val_dl = validation.to_dataloader(train=False, batch_size=64, num_workers=4)
-
-    raw_preds   = tft.predict(val_dl, mode='quantiles', return_index=True)
-    predictions = raw_preds.output
-    index       = raw_preds.index
+    val_dl    = validation.to_dataloader(train=False, batch_size=256, num_workers=4)
+    raw_preds = tft.predict(val_dl, mode='quantiles', return_index=True)
+    preds_arr = raw_preds.output   # shape: (N, horizon, 3)
+    index     = raw_preds.index.reset_index(drop=True)
 
     records = []
     for i, row in index.iterrows():
-        tic      = row['tic']
-        time_idx = row['time_idx']
-
-        origin = prep_df[
-            (prep_df['tic'] == tic) &
-            (prep_df['time_idx'] == time_idx)
-        ]
-        if origin.empty:
-            continue
-
-        preds = predictions[i]
-
-        # FIX: look up future rows to get per-horizon scale params
+        tic, time_idx = row['tic'], row['time_idx']
         future_rows = prep_df[
             (prep_df['tic'] == tic) &
             (prep_df['time_idx'] > time_idx) &
@@ -265,25 +255,18 @@ def run_tft_backtest(tft, validation, prep_df):
         ].sort_values('time_idx')
 
         for h in range(min(MAX_PRED_LENGTH, len(future_rows))):
-            fr   = future_rows.iloc[h]
-            sm_h = fr['scale_mean_close']
-            ss_h = fr['scale_std_close']
-            p10, p50, p90 = preds[h].tolist()
+            fr = future_rows.iloc[h]
+            sm_h, ss_h = fr['scale_mean_close'], fr['scale_std_close']
+            p10, p50, p90 = preds_arr[i, h].tolist()
             records.append({
-                'tic'           : tic,
-                'time_idx'      : time_idx + h + 1,
-                'horizon'       : h + 1,
-                'actual_scaled' : fr['close'],
-                'p50_scaled'    : p50,
-                'actual'        : fr['close'] * ss_h + sm_h,
-                'p10'           : p10         * ss_h + sm_h,
-                'p50'           : p50         * ss_h + sm_h,
-                'p90'           : p90         * ss_h + sm_h,
+                'tic': tic, 'time_idx': time_idx + h + 1, 'horizon': h + 1,
+                'actual_scaled': fr['close'],   'p50_scaled': p50,
+                'actual': fr['close'] * ss_h + sm_h,
+                'p10': p10 * ss_h + sm_h,
+                'p50': p50 * ss_h + sm_h,
+                'p90': p90 * ss_h + sm_h,
             })
-
-    df = pd.DataFrame(records)
-    print(f'Temp. Fusion T. backtest: {len(df):,} predictions')
-    return df
+    return pd.DataFrame(records)
 
 
 def run_hf_backtest(model, prep_df, cutoff_time_idx):

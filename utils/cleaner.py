@@ -3,15 +3,34 @@ import pandas as pd
 import numpy as np
 from utils.scaler import CryptoRollingScaler
 
-COLUMNS = ['close', 'volume', 'tic', 'rsi', 'macd', 'cci', 'dx', 'roc', 'ultosc',
-           'willr', 'obv', 'ht_dcphase', 'atr', 'natr', 'bb_width', 'ema_cross',
-           'candle_body', 'upper_wick', 'lower_wick', 'sentiment_index']
+MARKET_INDICATORS_PATH = 'data/market_indicators.csv'
+
+MARKET_INDICATOR_COLS = [
+    'VIX', 'HY_OAS_diff1', 'HY_OAS_diff5', 'DXY', 'DXY_diff1', 'DXY_diff5',
+    'T10Y2Y', 'Fear_Greed', 'RVOL_VIX', 'VIX_term_slope', 'HY_IG_spread',
+    'T10Y3M', 'GOLD', 'yield_curve_inverted', 'GPRT', 'FF_surprise',
+]
+
+PKL_COLS = ['close', 'volume', 'tic', 'rsi', 'macd', 'cci', 'dx', 'roc', 'ultosc',
+            'willr', 'obv', 'ht_dcphase', 'atr', 'natr', 'bb_width', 'ema_cross',
+            'candle_body', 'upper_wick', 'lower_wick', 'sentiment_index']
+
+# Post-merge columns (full set after market indicators are joined)
+COLUMNS      = PKL_COLS + MARKET_INDICATOR_COLS
 
 PRICE_COLS      = ['close', 'volume', 'obv']
 INDICATOR_COLS  = ['rsi', 'macd', 'cci', 'dx', 'roc', 'ultosc', 'willr',
                    'ht_dcphase', 'atr', 'natr', 'bb_width', 'ema_cross',
                    'candle_body', 'upper_wick', 'lower_wick', 'sentiment_index']
-NUMERIC_COLS    = [col for col in COLUMNS if col != 'tic']
+
+
+PRICE_AND_INDICATOR_COLS = [
+    'close', 'volume', 'rsi', 'macd', 'cci', 'dx', 'roc', 'ultosc',
+    'willr', 'obv', 'ht_dcphase', 'atr', 'natr', 'bb_width', 'ema_cross',
+    'candle_body', 'upper_wick', 'lower_wick', 'sentiment_index'
+]
+
+NUMERIC_COLS = PRICE_AND_INDICATOR_COLS
 
 
 class CleanerTS:
@@ -41,14 +60,30 @@ class CleanerTS:
         prev_row = window_before.iloc[-1] if not window_before.empty else window_after.iloc[0]
         next_row = window_after.iloc[0]   if not window_after.empty  else window_before.iloc[-1]
 
-        interpolated = (prev_row[NUMERIC_COLS] + next_row[NUMERIC_COLS]) / 2
-        local_std    = neighbors[NUMERIC_COLS].std().fillna(0)
-        noise        = pd.Series(np.random.normal(0, local_std * 0.1), index=NUMERIC_COLS)
+        # use PRICE_AND_INDICATOR_COLS — macro cols don't exist yet at this stage
+        interpolated = (prev_row[PRICE_AND_INDICATOR_COLS] + next_row[PRICE_AND_INDICATOR_COLS]) / 2
+        local_std    = neighbors[PRICE_AND_INDICATOR_COLS].std().fillna(0)
+        noise        = pd.Series(np.random.normal(0, local_std * 0.1), index=PRICE_AND_INDICATOR_COLS)
 
         filled_row        = interpolated + noise
         filled_row['tic'] = tic
         filled_row.name   = missing_date
-        return filled_row[COLUMNS]
+
+        # return only original cols — macro cols will be joined later via merge
+        original_cols = PRICE_AND_INDICATOR_COLS + ['tic']
+        return filled_row[original_cols]
+    
+
+    def _load_market_indicators(self) -> pd.DataFrame:
+        mi = pd.read_csv(MARKET_INDICATORS_PATH)
+        # fix the Unnamed: 0 date column
+        mi = mi.rename(columns={'Unnamed: 0': 'timestamp'})
+        mi['timestamp'] = pd.to_datetime(mi['timestamp'])
+        mi = mi.set_index('timestamp')
+        # normalize Fear_Greed to [0,1] — already bounded, no fitting needed
+        if 'Fear_Greed' in mi.columns:
+            mi['Fear_Greed'] = mi['Fear_Greed'] / 100.0
+        return mi
 
     # ── public ────────────────────────────────────────────────────────────────
 
@@ -87,28 +122,43 @@ class CleanerTS:
             ).sort_index()
 
         print(f'Solved {n_issues} issues')
-        data = data.reset_index()   # timestamp → column, index becomes 0,1,2...
+        data = data.reset_index()
         data = data.rename(columns={'index': 'timestamp'}) if 'timestamp' not in data.columns else data
+
+        # ── merge market indicators ───────────────────────────────────────────
+        mi = self._load_market_indicators()
+        data['timestamp'] = pd.to_datetime(data['timestamp'])
+        data = data.merge(mi, on='timestamp', how='left')
+
+        # ffill weekends/holidays where macro data is stale, then fill remaining
+        for col in MARKET_INDICATOR_COLS:
+            if col in data.columns:
+                data[col] = data[col].ffill().bfill().fillna(0)
 
         self.raw_data = data
         return data
-
-    def run_scaler(self, data: pd.DataFrame = None) -> pd.DataFrame:
+    
+    
+    def run_scaler(self, data: pd.DataFrame = None, cutoff_date: str = '2025-01-01') -> pd.DataFrame:
         data = self.raw_data if data is None else data
-
         if data is None:
             raise RuntimeError('No data found — run run_cleaner() first.')
 
+        # 1. rolling price scaler (existing)
         scaled = self.scaler.fit_transform(
             data,
             price_cols=PRICE_COLS,
             indicator_cols=INDICATOR_COLS,
         )
 
+        # 2. macro scaler (new) — fitted on train split only
+        scaled = self.scaler.fit_transform_macro(scaled, cutoff_date=cutoff_date)
+        self.scaler.save_macro_scalers()
+
         self.scaled_data = scaled
         return scaled
 
-    def run(self) -> pd.DataFrame:
-        """Convenience method: clean then scale in one call."""
+    # also update run() to pass cutoff_date through
+    def run(self, cutoff_date: str = '2025-01-01') -> pd.DataFrame:
         self.run_cleaner()
-        return self.run_scaler()
+        return self.run_scaler(cutoff_date=cutoff_date)

@@ -16,6 +16,8 @@ from scripts.tft_arch import prepare_tft_dataset
 from settings.train_settings import SETTINGS_TST
 from utils.API import HF_TOKEN
 
+from utils.cleaner import MARKET_INDICATOR_COLS
+
 torch.set_float32_matmul_precision('high')
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -35,12 +37,14 @@ COVARIATE_COLS = [
     'ultosc', 'willr', 'obv', 'ht_dcphase',
     'atr', 'natr', 'bb_width', 'ema_cross',
     'candle_body', 'upper_wick', 'lower_wick',
-    'day_of_week','sentiment_index',
-]
+    'sentiment_index',
+    'day_of_week', 'month',         # calendar — matches TFT's known reals
+] + MARKET_INDICATOR_COLS           # macro indicators — matches TFT's unknown reals
+
 
 # Only these are truly known in advance — everything else is derived from
 # future prices and MUST be zeroed in future_time_features to avoid leakage.
-KNOWN_FUTURE_COLS = ['day_of_week']
+KNOWN_FUTURE_COLS = ['day_of_week', 'month']
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -123,15 +127,9 @@ def _collate(batch: list[dict]) -> dict:
 #  DATA
 # ═════════════════════════════════════════════════════════════════════════════
 def get_data():
-    cleaner = CleanerTS(
-        dir=DATA_PATH,
-        window=7,
-        scaler_window=SCALER_WINDOW,
-    )
-    scaled_df = cleaner.run()
+    cleaner = CleanerTS(dir=DATA_PATH, window=7, scaler_window=SCALER_WINDOW)
+    scaled_df = cleaner.run(cutoff_date=CUTOFF_DATE)   # ← was missing cutoff
     print(f'Data ready: {scaled_df.shape}  |  tickers: {scaled_df.tic.nunique()}')
-
-    # reuse TFT's prepare function to get consistent time_idx and cutoff
     _, _, prep_df = prepare_tft_dataset(
         scaled_df,
         max_encoder_length=MAX_ENCODER_LENGTH,

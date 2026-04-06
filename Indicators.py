@@ -14,6 +14,8 @@ from sklearn.preprocessing import StandardScaler, RobustScaler
 
 warnings.filterwarnings('ignore')
 
+CORRELATION_DROP_THRESHOLD = 0.9
+
 # ========== 1. CONFIGURATION ==========
 
 # FRED series IDs (TED removed - obsolete after 2023)
@@ -361,16 +363,102 @@ def fetch_all_features(start_date="2012-01-01", end_date="2026-04-04", fred_api_
     
     return final_df
 
+def correlation_drop(df, threshold=CORRELATION_DROP_THRESHOLD) -> pd.DataFrame:
+    """
+    Drop features with pairwise correlation above threshold.
+    
+    Protected columns are never dropped regardless of correlation.
+    For each correlated pair, the column with lower variance is dropped
+    (proxy for information content when no target is available).
+    """
+
+    # These are NEVER dropped — each carries unique information
+    # or was explicitly chosen for a specific reason
+    PROTECTED = {
+        "VIX",               # core volatility anchor
+        "DXY",               # FX risk-off signal
+        "T10Y2Y",            # yield curve level
+        "Fear_Greed",        # crypto-native sentiment (different methodology from VIX)
+        "RVOL_VIX",          # realised vol (complements implied VIX)
+        "VIX_term_slope",    # term structure shape — derived, not raw
+        "HY_IG_spread",      # credit risk appetite delta — derived
+        "GOLD",              # safe-haven cross-asset
+        "yield_curve_inverted",  # binary regime signal
+        "GPRT",              # geopolitical threat — forward-looking
+        "FF_surprise",       # rate surprise signal — derived
+        "HY_OAS_diff1",      # credit momentum (different timescale from diff5)
+        "HY_OAS_diff5",      # credit momentum (different timescale from diff1)
+        "DXY_diff1",         
+        "DXY_diff5",         
+    }
+
+    cols = df.columns.tolist()
+    corr_matrix = df.corr().abs()
+
+    dropped = set()
+    drop_log = []
+
+    for i, col_a in enumerate(cols):
+        if col_a in dropped:
+            continue
+        for col_b in cols[i + 1:]:
+            if col_b in dropped:
+                continue
+            if corr_matrix.loc[col_a, col_b] >= threshold:
+                # Decide which to drop: protected > variance
+                a_protected = col_a in PROTECTED
+                b_protected = col_b in PROTECTED
+
+                if a_protected and b_protected:
+                    # Both protected — keep both, just log
+                    drop_log.append(
+                        f"  ⚠ BOTH PROTECTED — keeping [{col_a}, {col_b}] "
+                        f"(corr={corr_matrix.loc[col_a, col_b]:.3f})"
+                    )
+                    continue
+                elif b_protected:
+                    to_drop = col_a
+                elif a_protected:
+                    to_drop = col_b
+                else:
+                    # Neither protected — drop the lower-variance one
+                    to_drop = col_a if df[col_a].var() < df[col_b].var() else col_b
+
+                dropped.add(to_drop)
+                kept = col_b if to_drop == col_a else col_a
+                drop_log.append(
+                    f"  ✗ DROP [{to_drop}] — corr({col_a}, {col_b})"
+                    f"={corr_matrix.loc[col_a, col_b]:.3f}, kept [{kept}]"
+                )
+
+    print("\n" + "=" * 60)
+    print(f"CORRELATION DROP (threshold={threshold})")
+    print("=" * 60)
+    if drop_log:
+        for line in drop_log:
+            print(line)
+    else:
+        print("  No pairs above threshold — nothing dropped.")
+    
+    remaining = [c for c in cols if c not in dropped]
+    print(f"\n  Before: {len(cols)} features -> After: {len(remaining)} features")
+    if dropped:
+        print(f"  Dropped: {sorted(dropped)}")
+
+    return df[remaining]
+
+
 # ========== 4. SAVE AND VALIDATE ==========
-
-
-
-def save_and_validate(df, filename="ml_features_daily.csv"):
+def save_and_validate(df, filename="market_indicators.csv"):
     """Save dataset and print summary statistics"""
     
     if df is None or df.empty:
         print("\n❌ No data to save")
         return False
+    
+    # df.rename(columns = {'0: Unnamed':'Date'},inplace=True)
+
+    df = correlation_drop(df)
     
     # Save to CSV
     df.to_csv(filename)
@@ -412,7 +500,7 @@ if __name__ == "__main__":
     
     # Fetch all features from 2021-01-01 to 2026-04-01
     features = fetch_all_features(
-        start_date="2015-01-01",
+        start_date="2012-01-01",
         end_date="2026-04-01",
         fred_api_key=FRED_API_KEY
     )
@@ -422,8 +510,9 @@ if __name__ == "__main__":
 
     if features is not None:
         keep_cols = [
-            "VIX", #"VIX9D", 
-            #"VIX3M",
+            "VIX",
+            "VIX9D", 
+            "VIX3M",
             "HY_OAS_diff1", "HY_OAS_diff5",
             "DXY", "DXY_diff1", "DXY_diff5",
             "T10Y2Y",
@@ -438,7 +527,7 @@ if __name__ == "__main__":
             "GPR",            # headline geopolitical risk
             "GPRT",           # threat sub-index (forward-looking)
             "GPRA",           # act sub-index (events that materialised)
-          #  "FF_implied_rate", # market's priced-in rate
+            "FF_implied_rate", # market's priced-in rate
             "FF_surprise",    # implied − effective (hike/cut pressure)
         ]
         features = features[[c for c in keep_cols if c in features.columns]]
@@ -449,14 +538,8 @@ if __name__ == "__main__":
         print("READY FOR PPO STATE SPACE")
         print("=" * 60)
         print(f"State dimension: {len(features.columns)} features")
-        
-        # Compact high-signal subset for PPO
-        compact_cols = ["VIX", "HY_OAS_diff1", "DXY", "T10Y2Y", "Fear_Greed"]
-        available_compact = [c for c in compact_cols if c in features.columns]
-        
-        if available_compact:
-            print(f"\nRecommended PPO state subset: {available_compact}")
-            print(features[available_compact].tail(5))
-        else:
-            print("\nAvailable columns for PPO state:")
-            print(features.columns.tolist())
+
+
+        # correlation matrix print
+
+        print(features.corr().round(2).to_string())
