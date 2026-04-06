@@ -166,10 +166,13 @@ class CryptoTimeSeriesDataset(Dataset):
         context_length: int,
         prediction_length: int,
         covariate_cols: list[str],
+        known_future_cols: list[str]
     ):
         self.context_length    = context_length
         self.prediction_length = prediction_length
         self.samples           = []
+
+        known_idxs = [i for i, c in enumerate(covariate_cols) if c in known_future_cols]
 
         total_len = context_length + prediction_length
 
@@ -188,12 +191,17 @@ class CryptoTimeSeriesDataset(Dataset):
                 end_ctx  = start + context_length + MAX_LAG
                 end_pred = end_ctx + prediction_length
 
+                future_tf = np.zeros_like(covs[end_ctx:end_pred])
+
+                for idx in known_idxs:
+                    future_tf[:, idx] = covs[end_ctx:end_pred, idx]
+
                 self.samples.append({
                     'past_values'          : target[start:end_ctx],
                     'past_time_features'   : covs[start:end_ctx],
                     'past_observed_mask'   : np.ones(context_length + MAX_LAG, dtype=np.float32),
                     'future_values'        : target[end_ctx:end_pred],
-                    'future_time_features' : covs[end_ctx:end_pred],
+                    'future_time_features' : future_tf,
                     'origin_time_idx'      : int(tidxs[end_ctx - 1]),
                     'tic'                  : tic,
                     # FIX: store per-horizon scale params instead of origin-only
@@ -277,7 +285,7 @@ def run_hf_backtest(model, prep_df, cutoff_time_idx):
     known_idxs = [i for i, c in enumerate(covariate_cols) if c in KNOWN_FUTURE_COLS]
 
     ds = CryptoTimeSeriesDataset(
-        prep_df, MAX_ENCODER_LENGTH, MAX_PRED_LENGTH, covariate_cols,
+        prep_df, MAX_ENCODER_LENGTH, MAX_PRED_LENGTH, covariate_cols, KNOWN_FUTURE_COLS,
     )
     ds.samples = [
         s for s in ds.samples if s['origin_time_idx'] >= cutoff_time_idx
@@ -295,16 +303,16 @@ def run_hf_backtest(model, prep_df, cutoff_time_idx):
             # Only keep known-in-advance features (day_of_week).
             # The model was trained with all features, so this will degrade
             # performance — but it gives honest metrics without data leakage.
-            future_tf = batch['future_time_features'].clone()
-            mask = torch.ones(future_tf.shape[-1], dtype=torch.bool)
-            mask[known_idxs] = False
-            future_tf[:, :, mask] = 0.0
+            # future_tf = batch['future_time_features'].clone()
+            # mask = torch.ones(future_tf.shape[-1], dtype=torch.bool)
+            # mask[known_idxs] = False
+            # future_tf[:, :, mask] = 0.0
 
             out = model.generate(
                 past_values=batch['past_values'].to(DEVICE),
                 past_time_features=batch['past_time_features'].to(DEVICE),
                 past_observed_mask=batch['past_observed_mask'].to(DEVICE),
-                future_time_features=future_tf.to(DEVICE),
+                future_time_features=batch['future_time_features'].to(DEVICE),
             )
             samples = out.sequences.cpu().numpy()
 
@@ -405,11 +413,17 @@ def compute_horizon_metrics(results):
 
 
 def pinball_loss(results):
-    losses = {}
-    for q, col in [(0.1, 'p10'), (0.5, 'p50'), (0.9, 'p90')]:
-        err = results['actual'] - results[col]
-        losses[col] = float((q * err.clip(lower=0) + (1 - q) * (-err).clip(lower=0)).mean())
-    losses['mean'] = np.mean([losses['p10'], losses['p50'], losses['p90']])
+    rows = []
+    for tic, grp in results.groupby('tic'):
+        for q, col in [(0.1, 'p10'), (0.5, 'p50'), (0.9, 'p90')]:
+            err = grp['actual_scaled'] - grp[col + '_scaled'] \
+                  if col + '_scaled' in grp.columns else grp['actual'] - grp[col]
+            rows.append({'q': q, 'col': col,
+                         'loss': float((q * err.clip(lower=0) +
+                                        (1-q) * (-err).clip(lower=0)).mean())})
+    df = pd.DataFrame(rows)
+    losses = {col: df[df['col']==col]['loss'].mean() for col in ['p10','p50','p90']}
+    losses['mean'] = np.mean(list(losses.values()))
     return losses
 
 
