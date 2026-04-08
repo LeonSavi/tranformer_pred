@@ -26,7 +26,7 @@ MODEL_PATH         = 'outputs/hf_ts_transformer.pt'
 MAX_ENCODER_LENGTH = 90
 MAX_PRED_LENGTH    = 7
 SCALER_WINDOW      = 90
-CUTOFF_DATE        = '2025-01-01'
+CUTOFF_DATE        = '2025-09-01'
 REPO_ID            = 'LeoSavi/HF_TST_Crypto'
 
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -38,15 +38,15 @@ COVARIATE_COLS = [
     'atr', 'natr', 'bb_width', 'ema_cross',
     'candle_body', 'upper_wick', 'lower_wick',
     'sentiment_index',
-    'day_of_week', 'month',         # calendar — matches TFT's known reals
+    'day_of_week', 'month', 'is_weekend',        # calendar — matches TFT's known reals
 ] + MARKET_INDICATOR_COLS           # macro indicators — matches TFT's unknown reals
 
 
 # Only these are truly known in advance — everything else is derived from
 # future prices and MUST be zeroed in future_time_features to avoid leakage.
-KNOWN_FUTURE_COLS = ['day_of_week', 'month']
+KNOWN_FUTURE_COLS = ['day_of_week', 'month', 'is_weekend']
 
-
+WARMUP_EPOCHS = 3
 # ═════════════════════════════════════════════════════════════════════════════
 #  DATASET
 # ═════════════════════════════════════════════════════════════════════════════
@@ -82,7 +82,7 @@ class CryptoTimeSeriesDataset(Dataset):
 
             target = grp['close'].values.astype(np.float32)
             covs   = grp[covariate_cols].values.astype(np.float32)
-            tidxs  = grp['time_idx'].values
+            tidxs  = grp['time_idx'].values.astype(np.float32)
             MAX_LAG = 7
 
             for start in range(n - total_len - MAX_LAG + 1):
@@ -169,6 +169,12 @@ def build_model(n_time_features: int) -> TimeSeriesTransformerForPrediction:
     )
     return TimeSeriesTransformerForPrediction(config)
 
+def lr_lambda(epoch):
+    
+    if epoch < WARMUP_EPOCHS:
+        return (epoch + 1) / WARMUP_EPOCHS
+    return 1.0
+
 
 # ═════════════════════════════════════════════════════════════════════════════
 #  TRAIN
@@ -223,12 +229,21 @@ def train(prep_df: pd.DataFrame):
         lr=SETTINGS_TST['learning_rate'],
         weight_decay=1e-3,
     )
+
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
         patience=SETTINGS_TST['reduce_on_plateau_patience'],
-        factor=0.5,
+        factor=SETTINGS_TST['reduce_on_plateau_factor'], 
+        min_lr=1e-6,
     )
 
+
+
+    warmup_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
+
+    # in training loop — replace scheduler.step(avg_val) with:
+
+    
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f'Model parameters: {n_params:,}')
 
@@ -276,7 +291,10 @@ def train(prep_df: pd.DataFrame):
 
         avg_train = np.mean(train_losses)
         avg_val   = np.mean(val_losses)
-        scheduler.step(avg_val)
+        if epoch < WARMUP_EPOCHS:
+            warmup_scheduler.step()
+        else:
+            scheduler.step(avg_val)
         lr_now = optimizer.param_groups[0]['lr']
 
         history['epoch'].append(epoch + 1)

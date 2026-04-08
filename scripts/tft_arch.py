@@ -33,25 +33,53 @@ def prepare_tft_dataset(
     flat_df: pd.DataFrame,
     max_encoder_length: int = 90,
     max_prediction_length: int = 7,
-    cutoff_date: str = None,
-):
+    cutoff_date: str = '2025-09-01',
+    mult_buffer:int = 2):
+
     df = flat_df.copy()
 
-    # timestamp must be a column at this point (scaler already reset_index'd)
+    total_before = df['tic'].nunique()
+    n = (90+max_encoder_length+max_prediction_length)*mult_buffer
+
+    train_counts = (
+        df[df['timestamp'] < pd.to_datetime(cutoff_date)]
+        .groupby('tic')['timestamp']
+        .nunique()
+        )
+    
+    sufficient = train_counts[train_counts >= n].index
+
+    dropped_short = total_before - len(sufficient)
+    print(f"  Dropped {dropped_short} tickers with < {n} training days")
+    df = df[df['tic'].isin(sufficient)].copy()
+
     if 'timestamp' not in df.columns:
         df = df.reset_index()
 
     df = df.sort_values(['tic', 'timestamp']).reset_index(drop=True)
-    df['time_idx']    = df.groupby('tic').cumcount()
-    df['day_of_week'] = df['timestamp'].dt.dayofweek
-    df['month'] = df['timestamp'].dt.month
-    # ── fix: must be string for TimeSeriesDataSet categorical ────────────────
-    df['is_weekend'] = df['timestamp'].dt.dayofweek.ge(5).map(
-        {True: 'yes', False: 'no'}
-    )
 
-    cutoff          = cutoff_date or df['timestamp'].quantile(0.8)
-    training_cutoff = df[df['timestamp'] <= cutoff]['time_idx'].max()
+    # ── calendar-based time_idx ───────────────────────────────────
+    all_dates   = sorted(df['timestamp'].unique())
+    date_to_idx = {d: i for i, d in enumerate(all_dates)}
+    df['time_idx'] = df['timestamp'].map(date_to_idx)
+    # ─────────────────────────────────────────────────────────────
+
+    df['day_of_week'] = df['timestamp'].dt.dayofweek.astype(str)
+    df['month']       = df['timestamp'].dt.month.astype(str)
+    df['is_weekend']  = df['timestamp'].dt.dayofweek.ge(5).map({True: 1, False: 0}).astype(str)
+
+    cutoff          = pd.to_datetime(cutoff_date) if cutoff_date \
+                      else df['timestamp'].quantile(0.8)
+    training_cutoff = df[df['timestamp'] < cutoff]['time_idx'].max()
+
+    # ── keep only tickers present in BOTH splits ──────────────────
+    train_tickers = set(df[df['timestamp'] < cutoff]['tic'].unique())
+    val_tickers   = set(df[df['timestamp'] >=  cutoff]['tic'].unique())
+    common        = train_tickers & val_tickers
+    dropped       = len(df['tic'].unique()) - len(common)
+    print(f"  Dropped {dropped} val-only tickers — keeping {len(common)} common tickers")
+    df = df[df['tic'].isin(common)].copy()
+    # ─────────────────────────────────────────────────────────────
 
     scale_cols = [c for c in df.columns
                   if c.startswith('scale_mean_') or c.startswith('scale_std_')]
@@ -72,9 +100,8 @@ def prepare_tft_dataset(
             'candle_body', 'upper_wick', 'lower_wick',
             'sentiment_index',
         ] + scale_cols + [c for c in MARKET_INDICATOR_COLS if c in df.columns],
-        time_varying_known_reals=[
-            'time_idx', 'day_of_week', 'month',
-        ] ,
+        time_varying_known_categoricals=['day_of_week', 'month', 'is_weekend'],
+        time_varying_known_reals=['time_idx'],
         target_normalizer=TorchNormalizer(method='identity'),
         allow_missing_timesteps=True,
     )
@@ -82,8 +109,7 @@ def prepare_tft_dataset(
     validation = TimeSeriesDataSet.from_dataset(
         training, df,
         min_prediction_idx=training_cutoff + 1,
-        stop_randomization=True
-
+        stop_randomization=True,
     )
 
     return training, validation, df

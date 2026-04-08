@@ -36,7 +36,7 @@ DATA_PATH          = 'data/train_data_1d.pkl'
 MAX_ENCODER_LENGTH = 90
 MAX_PRED_LENGTH    = 7
 SCALER_WINDOW      = 90
-CUTOFF_DATE        = '2025-01-01'
+CUTOFF_DATE        = '2025-09-01'
 
 # HuggingFace repos
 TFT_REPO_ID  = 'LeoSavi/TFT_Crypto'
@@ -58,13 +58,13 @@ COVARIATE_COLS = [
     'atr', 'natr', 'bb_width', 'ema_cross',
     'candle_body', 'upper_wick', 'lower_wick',
     'sentiment_index',
-    'day_of_week', 'month',         # calendar — matches TFT's known reals
+    'day_of_week', 'month', 'is_weekend',        # calendar — matches TFT's known reals
 ] + MARKET_INDICATOR_COLS           # macro indicators — matches TFT's unknown reals
 
 
 # Only these are truly known in advance — everything else is derived from
 # future prices and MUST be zeroed in future_time_features to avoid leakage.
-KNOWN_FUTURE_COLS = ['day_of_week', 'month']
+KNOWN_FUTURE_COLS = ['day_of_week', 'month', 'is_weekend']
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -76,7 +76,7 @@ def get_data():
         window=7,
         scaler_window=SCALER_WINDOW,
     )
-    scaled_df = cleaner.run()
+    scaled_df = cleaner.run(cutoff_date=CUTOFF_DATE)
     print(f'Data ready: {scaled_df.shape}  |  tickers: {scaled_df.tic.nunique()}')
 
     training, validation, prep_df = prepare_tft_dataset(
@@ -142,7 +142,7 @@ def load_hf_model(hf_path, n_time_features):
 
         # Distributional settings — 'student_t' is excellent for heavy-tailed crypto data
         distribution_output='student_t',
-        num_parallel_samples=200,
+        num_parallel_samples=100,
         
         # Lag sequence — [1..7] is perfect for catching weekly patterns in Binance data
         lags_sequence=[1, 2, 3, 4, 5, 6, 7]
@@ -445,9 +445,11 @@ def compute_mase(results, label=''):
 
 
 def diebold_mariano_test(res_a, res_b, label_a='Temp. Fusion T.', label_b='Time Series T.'):
+
     merged = res_a.merge(res_b, on=['tic', 'time_idx', 'horizon'], suffixes=('_a', '_b'))
-    e_a = (merged['actual_a'] - merged['p50_a']) ** 2
-    e_b = (merged['actual_b'] - merged['p50_b']) ** 2
+    
+    e_a = (merged['actual_scaled_a'] - merged['p50_scaled_a']) ** 2
+    e_b = (merged['actual_scaled_b'] - merged['p50_scaled_b']) ** 2
     d   = e_a - e_b
 
     d_bar   = d.mean()
@@ -710,8 +712,9 @@ if __name__ == '__main__':
     hf_model = load_hf_model(hf_path, n_time_features=len(covariate_cols))
 
     # 4 — backtests (same validation window)
-    print('\n══ Running Backtests ══')
+    print('\n══ Running Backtests TFT══')
     tft_results = run_tft_backtest(tft, validation, prep_df)
+    print('\n══ Running Backtests TST══')
     hf_results  = run_hf_backtest(hf_model, prep_df, cutoff_time_idx)
 
     tft_results.to_csv('outputs/tft_backtest.csv', index=False)
@@ -721,15 +724,15 @@ if __name__ == '__main__':
     print('\n══ Metrics ══')
     tft_metrics = compute_metrics(tft_results, label='Temp. Fusion T.')
     hf_metrics  = compute_metrics(hf_results,  label='Time Series T.')
-
+    print('\n══ Metrics Horizon ══')
     tft_horizon = compute_horizon_metrics(tft_results)
     hf_horizon  = compute_horizon_metrics(hf_results)
-
+    print('\n══ Metrics Pinball ══')
     tft_pinball = pinball_loss(tft_results)
     hf_pinball  = pinball_loss(hf_results)
     print(f'\nPinball — Temp. Fusion T.:    {tft_pinball}')
     print(f'Pinball — Time Series T.: {hf_pinball}')
-
+    print('\n══ Metrics DM ══')
     dm = diebold_mariano_test(tft_results, hf_results)
 
     # 6 — plots
