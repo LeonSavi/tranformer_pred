@@ -622,29 +622,44 @@ def plot_aggregate_comparison(tft_m, hf_m):
     plt.show()
 
 
-def plot_mase_comparison(tft_results, hf_results):
+def plot_mase_comparison(tft_results, hf_results, 
+                         selected_tickers=['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'ADAUSDT', 'XRPUSDT']):
     """Per-ticker MASE bar chart."""
     tft_mase = compute_mase(tft_results, label='Temp. Fusion T.')
     hf_mase  = compute_mase(hf_results,  label='Time Series T.')
 
     merged = tft_mase.merge(hf_mase, on='tic', suffixes=('_tft', '_hf'))
-    merged = merged.sort_values('mase_tft')
+
+    # ── filter to selected tickers if provided ────────────────────
+    if selected_tickers:
+        merged = merged[merged['tic'].isin(selected_tickers)]
+        # preserve the order of selected_tickers
+        merged['_order'] = merged['tic'].map(
+            {t: i for i, t in enumerate(selected_tickers)}
+        )
+        merged = merged.sort_values('_order').drop(columns='_order')
+    else:
+        merged = merged.sort_values('mase_tft')
+    # ─────────────────────────────────────────────────────────────
 
     x = np.arange(len(merged))
     w = 0.35
-    fig, ax = plt.subplots(figsize=(max(10, len(merged) * 0.4), 5))
+    fig, ax = plt.subplots(figsize=(max(6, len(merged) * 1.2), 5))
     ax.bar(x - w/2, merged['mase_tft'], w, label='Temp. Fusion T.', color='#1f77b4')
     ax.bar(x + w/2, merged['mase_hf'],  w, label='Time Series T.',  color='#d62728')
     ax.axhline(1.0, color='grey', lw=1.0, ls='--', label='Naïve baseline (MASE=1)')
 
+    # strip USDT for cleaner labels
+    labels = [t.replace('USDT', '') for t in merged['tic']]
     ax.set_xticks(x)
-    ax.set_xticklabels(merged['tic'], rotation=45, ha='right', fontsize=8)
+    ax.set_xticklabels(labels, rotation=0, ha='center', fontsize=10)
     ax.set_ylabel('MASE')
-    ax.set_title('MASE per Ticker (lower = better; dashed = naïve)', fontweight='bold')
+    ax.set_title('MASE — Selected Assets (lower = better; dashed = naïve)',
+                 fontweight='bold')
     ax.legend()
     plt.tight_layout()
-    fig.savefig(f'{PLOT_DIR}/mase_comparison.png', bbox_inches='tight')
-    print(f'Saved → {PLOT_DIR}/mase_comparison.png')
+    fig.savefig(f'{PLOT_DIR}/mase_comparison_selected.png', bbox_inches='tight')
+    print(f'Saved → {PLOT_DIR}/mase_comparison_selected.png')
     plt.show()
 
 
